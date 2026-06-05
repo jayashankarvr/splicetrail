@@ -159,10 +159,11 @@ class Config:
     - SPLICETRAIL_MIN_PROBABILITY, SPLICETRAIL_NOISE_SIGMA
     - SPLICETRAIL_PYRAMID_ENABLED, SPLICETRAIL_LSH_ENABLED
     """
-    patch_size: int = field(default_factory=lambda: _env_int("SPLICETRAIL_PATCH_SIZE", 3, min_val=3, max_val=6))
+    patch_size: int = field(default_factory=lambda: _env_int("SPLICETRAIL_PATCH_SIZE", 3, min_val=3, max_val=16))
     stride: int = field(default_factory=lambda: _env_int("SPLICETRAIL_STRIDE", 1, min_val=1))
     entropy_threshold: Optional[float] = field(default_factory=lambda: _env_float("SPLICETRAIL_ENTROPY_THRESHOLD", 2.5, min_val=0.0))
     descriptor_dim: int = field(default_factory=lambda: _env_int("SPLICETRAIL_DESCRIPTOR_DIM", 256, min_val=64, max_val=512))
+    descriptor_spatial_pooling: bool = field(default_factory=lambda: _env_bool("SPLICETRAIL_DESCRIPTOR_POOLING", True))
     k_neighbors: int = field(default_factory=lambda: _env_int("SPLICETRAIL_K_NEIGHBORS", 100, min_val=1))
     distance_threshold: float = field(default_factory=lambda: _env_float("SPLICETRAIL_DISTANCE_THRESHOLD", 0.5, min_val=0.0))
     min_probability: float = field(default_factory=lambda: _env_float("SPLICETRAIL_MIN_PROBABILITY", 0.5, min_val=0.0, max_val=1.0))
@@ -263,9 +264,9 @@ class Config:
             )
 
     def __post_init__(self):
-        # Validate patch_size
-        if self.patch_size not in (3, 4, 5, 6):
-            raise ConfigurationError(f"patch_size must be 3, 4, 5, or 6, got {self.patch_size}")
+        # Validate patch_size (multi-size support: 3..16)
+        if not (3 <= self.patch_size <= 16):
+            raise ConfigurationError(f"patch_size must be between 3 and 16, got {self.patch_size}")
         # Validate stride
         if self.stride < 1:
             raise ConfigurationError(f"stride must be >= 1, got {self.stride}")
@@ -342,9 +343,9 @@ class ForensicsEngine:
                     "Install with: pip install splicetrail[learned]. "
                     "Falling back to mathematical descriptors."
                 )
-                self.descriptor = CompositeDescriptor(target_dim=self.config.descriptor_dim)
+                self.descriptor = CompositeDescriptor(target_dim=self.config.descriptor_dim, spatial_pooling=self.config.descriptor_spatial_pooling)
         else:
-            self.descriptor = CompositeDescriptor(target_dim=self.config.descriptor_dim)
+            self.descriptor = CompositeDescriptor(target_dim=self.config.descriptor_dim, spatial_pooling=self.config.descriptor_spatial_pooling)
 
         # Search index (distributed, hybrid LSH, or standard)
         if self.config.distributed_enabled:
