@@ -1,0 +1,67 @@
+version: '3.8'
+
+services:
+  splicetrail-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: splicetrail:latest
+    container_name: splicetrail-api
+    ports:
+      - "8000:8000"
+    volumes:
+      # Persistent storage for indexes
+      - splicetrail-data:/data
+      # Optional: mount local images directory
+      # - ./images:/images:ro
+    environment:
+      # SpliceTrail Configuration
+      - SPLICETRAIL_PATCH_SIZE=3
+      - SPLICETRAIL_DESCRIPTOR_DIM=256
+      - SPLICETRAIL_MIN_PROBABILITY=0.5
+      - SPLICETRAIL_MAX_TARGETS=1000
+      - SPLICETRAIL_PYRAMID_ENABLED=false
+      - SPLICETRAIL_LSH_ENABLED=false
+      - SPLICETRAIL_COHERENCE_ENABLED=true
+      # Uncomment for GPU support (requires NVIDIA Docker)
+      # - SPLICETRAIL_USE_GPU=true
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live')"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    # Uncomment for GPU support
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+  # Optional: Nginx reverse proxy
+  nginx:
+    image: nginx:alpine
+    container_name: splicetrail-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      # For HTTPS, mount certificates:
+      # - ./certs:/etc/nginx/certs:ro
+    depends_on:
+      - splicetrail-api
+    restart: unless-stopped
+    profiles:
+      - with-nginx
+
+volumes:
+  splicetrail-data:
+    driver: local
+
+networks:
+  default:
+    name: splicetrail-network
