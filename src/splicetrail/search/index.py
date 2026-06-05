@@ -7,7 +7,7 @@ from typing import List, Dict, Any, Optional
 import numpy as np
 
 from splicetrail.logging_config import get_logger
-from splicetrail.exceptions import IndexError as SpliceTrailIndexError, IndexCorruptedError, DependencyError
+from splicetrail.exceptions import IndexStoreError as SpliceTrailIndexError, IndexCorruptedError, DependencyError
 
 logger = get_logger("search.index")
 
