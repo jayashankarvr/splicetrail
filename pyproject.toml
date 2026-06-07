@@ -99,7 +99,7 @@ splicetrail = "splicetrail.cli:main"
 [project.urls]
 Homepage = "https://github.com/jayashankarvr/splicetrail"
 Repository = "https://github.com/jayashankarvr/splicetrail"
-Issues = "https://github.com/splicetrail/splicetrail/issues"
+Issues = "https://github.com/jayashankarvr/splicetrail/issues"
 
 [tool.setuptools.packages.find]
 where = ["src"]
