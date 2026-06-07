@@ -97,6 +97,9 @@ dmypy.json
 *.swo
 *~
 
+# Internal/dev docs - kept local, not published
+_internal/
+
 # SpliceTrail specific
 *.index
 *.meta.npy

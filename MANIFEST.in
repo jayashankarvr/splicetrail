@@ -5,11 +5,6 @@ include CHANGELOG.md
 include CONTRIBUTING.md
 include CODE_OF_CONDUCT.md
 include SECURITY.md
-include QUICK-REFERENCE.md
-include DOCUMENTATION.md
-include MULTI-SCALE-DESIGN.md
-include VISUALIZATION-GUIDE.md
-include CRITICAL-IMPROVEMENTS.md
 
 # Include configuration files
 include pyproject.toml
