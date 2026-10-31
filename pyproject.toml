@@ -82,9 +82,6 @@ Issues = "https://github.com/jayashankarvr/splicetrail/issues"
 [tool.setuptools.packages.find]
 where = ["src"]
 
-[tool.setuptools.package-data]
-"splicetrail.descriptors" = ["data/*.npz"]
-
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
