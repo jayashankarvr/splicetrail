@@ -1,7 +1,7 @@
 """Fetch benchmark datasets into $SPLICETRAIL_DATA_DIR (default ~/.cache/splicetrail).
 
 Usage:
-    python -m splicetrail.bench.download casia2
+    python -m splicetrail.bench.download casia2      # or: coverage, comofod
 
 Datasets come from Kaggle and need credentials: an API token in
 KAGGLE_API_TOKEN (or KAGGLE_ACCESS_TOKEN), or KAGGLE_USERNAME and KAGGLE_KEY,
