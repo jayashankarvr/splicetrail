@@ -491,9 +491,6 @@ def serve(
     """Start the REST API server."""
     try:
         from splicetrail.api import run_server
-    except ValueError as e:
-        # importing splicetrail.api builds the default app, which reads SPLICETRAIL_HASH_LIST
-        raise click.ClickException(str(e))
     except ImportError:
         raise click.ClickException(
             "FastAPI required for API server: pip install splicetrail[api]"
