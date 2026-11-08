@@ -8,7 +8,7 @@ component is a cheap way to drop scattered false matches.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import List, Sequence, Tuple
+from typing import Sequence, Tuple
 
 import numpy as np
 from scipy.ndimage import label

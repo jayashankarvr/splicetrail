@@ -2,9 +2,12 @@
 
 from collections import defaultdict
 from dataclasses import dataclass
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import TYPE_CHECKING, Dict, List, Optional, Sequence, Tuple
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from splicetrail.aggregation.heatmap import Match
 
 
 @dataclass

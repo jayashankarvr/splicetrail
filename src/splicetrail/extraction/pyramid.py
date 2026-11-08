@@ -5,7 +5,7 @@ from typing import List, Tuple, Optional
 import numpy as np
 from PIL import Image
 
-from splicetrail.extraction.patches import PatchExtractor, PatchCollection
+from splicetrail.extraction.patches import PatchExtractor
 
 
 @dataclass
