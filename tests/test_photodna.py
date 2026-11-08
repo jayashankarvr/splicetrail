@@ -197,11 +197,20 @@ def test_redirect_refused():
     assert KEY not in str(exc.value)
 
 
+def _stderr_runner():
+    # Click 8.2 always keeps stderr apart and dropped mix_stderr; 8.1 (the
+    # newest release for Python 3.9) needs it to be asked.
+    try:
+        return CliRunner(mix_stderr=False)
+    except TypeError:
+        return CliRunner()
+
+
 def test_cli_announces_upload_on_stderr():
     fake = MagicMock()
     fake.match.return_value = {"IsMatch": False}
     with patch.object(photodna, "PhotoDnaClient", return_value=fake):
-        result = CliRunner().invoke(cli, ["hash", str(IMAGE), "-a", "photodna"])
+        result = _stderr_runner().invoke(cli, ["hash", str(IMAGE), "-a", "photodna"])
     assert f"Sending {IMAGE} to the PhotoDNA Cloud Service" in result.stderr
     assert "Sending" not in result.stdout
 
@@ -213,3 +222,9 @@ def test_cli_announces_upload_on_stderr():
 def test_lookalike_loopback_hosts_refused(endpoint):
     with pytest.raises(PhotoDnaError):
         PhotoDnaClient(key=KEY, endpoint=endpoint)
+
+
+def test_missing_requests_is_a_clear_error(monkeypatch):
+    monkeypatch.setattr(photodna, "requests", None)
+    with pytest.raises(PhotoDnaError, match="requests package"):
+        photodna.PhotoDnaClient(key=KEY)

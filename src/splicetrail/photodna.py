@@ -27,7 +27,10 @@ import os
 from typing import Optional
 from urllib.parse import urlsplit
 
-import requests
+try:
+    import requests
+except ImportError:  # only needed once a client is made; see PhotoDnaClient
+    requests = None
 
 __all__ = ["PhotoDnaClient", "PhotoDnaError"]
 
@@ -67,6 +70,10 @@ class PhotoDnaClient:
 
     def __init__(self, key: Optional[str] = None, endpoint: Optional[str] = None,
                  timeout: float = 30.0):
+        if requests is None:
+            raise PhotoDnaError(
+                "PhotoDNA needs the requests package: pip install splicetrail[hash]"
+            )
         key = key or os.environ.get("SPLICETRAIL_PHOTODNA_KEY")
         if not key:
             raise PhotoDnaError(
