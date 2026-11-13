@@ -238,18 +238,20 @@ def test_phash_lib_mangled_symbol_fallback(fresh_loader, monkeypatch):
     monkeypatch.delenv("SPLICETRAIL_PHASH_LIB", raising=False)
     fn = _fake_hasher()
     lib = _FakeCDLL(_Z16ph_dct_imagehashPKcRm=fn)
-    with mock.patch(
-        "ctypes.util.find_library", return_value="libpHash.so.0"
-    ), mock.patch("ctypes.CDLL", return_value=lib):
+    with (
+        mock.patch("ctypes.util.find_library", return_value="libpHash.so.0"),
+        mock.patch("ctypes.CDLL", return_value=lib),
+    ):
         assert _load_phash_lib() is fn
         assert "phash-lib" in available_algorithms()
 
 
 def test_phash_lib_loaded_without_symbol(fresh_loader, original, monkeypatch):
     monkeypatch.delenv("SPLICETRAIL_PHASH_LIB", raising=False)
-    with mock.patch(
-        "ctypes.util.find_library", return_value="/usr/lib/libpHash.so.0"
-    ), mock.patch("ctypes.CDLL", return_value=_FakeCDLL()):
+    with (
+        mock.patch("ctypes.util.find_library", return_value="/usr/lib/libpHash.so.0"),
+        mock.patch("ctypes.CDLL", return_value=_FakeCDLL()),
+    ):
         assert "phash-lib" not in available_algorithms()
         with pytest.raises(
             DependencyError,

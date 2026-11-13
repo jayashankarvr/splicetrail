@@ -220,9 +220,10 @@ def test_hash_endpoint_nothing_installed():
     client = TestClient(create_app())
     from splicetrail import hashing
 
-    with mock.patch.dict(
-        sys.modules, {"pdqhash": None, "imagehash": None}
-    ), mock.patch.object(hashing, "_load_phash_lib", return_value=None):
+    with (
+        mock.patch.dict(sys.modules, {"pdqhash": None, "imagehash": None}),
+        mock.patch.object(hashing, "_load_phash_lib", return_value=None),
+    ):
         r = client.post("/hash", files={"file": _bridge()})
     assert r.status_code == 501
     assert "pip install splicetrail[hash]" in r.json()["detail"]
