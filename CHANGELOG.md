@@ -30,10 +30,11 @@ expose. On the synthetic benchmark
 - A request waits at most `SPLICETRAIL_LOCK_TIMEOUT` seconds (default 30) for the engine, then gets 503 with `Retry-After`; image decoding runs off the event loop too.
 - `/hash?algorithm=photodna` is refused (403) unless both `SPLICETRAIL_API_KEY` and `SPLICETRAIL_PHOTODNA_KEY` are set, so only key holders can send images to Microsoft.
 - Unexpected errors return a fixed message and a request id (also in `X-Request-ID`); details go to the server log only. `/hash` no longer echoes exception text, and `/match` returns only its own input-check messages as 400.
+- With `SPLICETRAIL_API_KEY` set, `/health/ready` (which needs no key) returns only its status to callers without the key; target count, index size and free space need the key.
 - Docker: compose publishes the API on the host's `127.0.0.1` only and passes `SPLICETRAIL_API_KEY` through; nginx allows 51 MB bodies for multipart framing.
 
 ### Added (release)
-- **Persistent API index**: `SPLICETRAIL_INDEX_DIR` loads the index at startup and saves it after every index and delete, as a complete snapshot switched in atomically; indexed images are kept there as lossless PNGs. The Docker image sets it to `/data`. `/health/ready` checks that the directory is writable and reports free space; `/health` reports `max_targets` and `persistent`.
+- **Persistent API index**: `SPLICETRAIL_INDEX_DIR` loads the index at startup and saves it after every index and delete, as a complete snapshot switched in atomically; indexed images are kept there as lossless PNGs. The Docker image sets it to `/data`. `/health/ready` checks that the directory is writable and reports free space; `/health` reports `max_targets` and `persistent`. Snapshots name images relative to the directory, so it can be moved or copied. A target whose image file is missing at startup is logged, shown with `image_available: false` in `/targets` and listed in `/match`'s `unavailable_targets`. An index directory the server can't write to stops startup with a one-line message naming it (create a bind-mounted `./data` before `docker run`; Docker makes a missing one owned by root).
 - Benchmark runner `--query-scales` and `--thorough`, and `python -m splicetrail.bench.index_size` (flat vs IVF-PQ size and search time), so the README's numbers can be reproduced.
 - Python 3.9 to 3.13 support; CI tests every version with every extra, plus lint (ruff, black, mypy with pinned versions) and build (`twine check`) jobs. mypy is clean.
 
@@ -43,6 +44,8 @@ expose. On the synthetic benchmark
 - Packaging: SPDX license metadata (`license = "Apache-2.0"`, `license-files`), `setuptools>=77`; the unused `requirements-lock.txt` is gone.
 - The API uses a lifespan handler instead of the deprecated `on_event`.
 - Docs: API key, server settings, persistence and status codes in `docs/API.md` and the README; Kubernetes example runs one replica (the index is per process); every benchmark number names its reproducing command; `thorough` measured at about 9x the default time (was stated as 13x); IVF-PQ re-measured (3.6x smaller, about 45x faster search on 200,000 descriptors); SECURITY.md reports go through GitHub private vulnerability reporting.
+- `/match` with `target_ids` naming a target that isn't indexed returns 404 listing the unknown ids (was 200 with `detected: false`).
+- `/health/live` and `/health/ready` accept `HEAD` (was 405).
 - Benchmark runner table header no longer runs `det_auc` and `sec_per_image` together.
 
 ### Fixed

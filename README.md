@@ -445,7 +445,13 @@ Publish the port on the host's loopback, or set `SPLICETRAIL_API_KEY`.
 # Build image
 docker build -t splicetrail .
 
-# Run container: loopback only, key required, index persisted in ./data
+# Run container: loopback only, key required, index in a named volume
+docker run -p 127.0.0.1:8000:8000 -e SPLICETRAIL_API_KEY -v splicetrail-data:/data splicetrail
+
+# Or keep the index in ./data. Create it first (it must be writable by uid
+# 1000, the server user): Docker would create a missing one owned by root,
+# and the server would stop with "Can't use index dir /data"
+mkdir -p data
 docker run -p 127.0.0.1:8000:8000 -e SPLICETRAIL_API_KEY -v ./data:/data splicetrail
 
 # Or use docker compose (publishes 127.0.0.1:8000, named volume for /data,

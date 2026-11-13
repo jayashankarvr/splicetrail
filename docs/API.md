@@ -163,6 +163,7 @@ Root endpoint - basic health check.
 #### `GET /health/live`
 
 Kubernetes liveness probe - checks if service is alive. Never needs the API key.
+`HEAD` works too (same status, no body).
 
 **Response:**
 ```json
@@ -183,7 +184,11 @@ Kubernetes liveness probe - checks if service is alive. Never needs the API key.
 
 Kubernetes readiness probe - checks if service is ready to accept requests.
 Never needs the API key. With `SPLICETRAIL_INDEX_DIR` set it also checks that
-the directory is writable and reports its free space.
+the directory is writable and reports its free space. `HEAD` works too (same
+status, no body).
+
+With `SPLICETRAIL_API_KEY` set, a caller without the key gets only
+`{"status": "ready"}`; send the key to see the fields below.
 
 **Response:**
 ```json
@@ -196,7 +201,8 @@ the directory is writable and reports its free space.
 }
 ```
 
-`storage_free_mb` is present only with `SPLICETRAIL_INDEX_DIR`.
+`storage_free_mb` is present only with `SPLICETRAIL_INDEX_DIR`. Every field
+but `status` is left out for callers without the key when a key is set.
 
 **Status Codes:**
 - `200 OK`: Service is ready
@@ -274,6 +280,7 @@ Get current engine configuration.
 
 **Status Codes:**
 - `200 OK`: Configuration returned
+- `401 Unauthorized`: API key required and missing or wrong
 
 ---
 
@@ -336,7 +343,13 @@ curl -X POST "http://localhost:8000/index?image_id=suspect_photo_001" \
 
 List all indexed target images.
 
-Each entry holds only the target's id and its size; server file paths are never returned.
+Each entry holds only the target's id, its size and whether its image is
+available; server file paths are never returned.
+
+`image_available` is false when the index was loaded from
+`SPLICETRAIL_INDEX_DIR` but the target's PNG is missing from `images/`. Such a
+target stays listed (copy the file back and restart to restore it) but can't
+match anything; the server logs a warning naming it at startup.
 
 **Response:**
 ```json
@@ -344,11 +357,13 @@ Each entry holds only the target's id and its size; server file paths are never 
   "targets": [
     {
       "image_id": "suspect_photo_001",
-      "shape": {"height": 1024, "width": 768}
+      "shape": {"height": 1024, "width": 768},
+      "image_available": true
     },
     {
       "image_id": "suspect_photo_002",
-      "shape": {"height": 2048, "width": 1536}
+      "shape": {"height": 2048, "width": 1536},
+      "image_available": true
     }
   ],
   "count": 2
@@ -400,7 +415,8 @@ Match a source image against indexed targets.
 - **Content-Type**: `multipart/form-data`
 - **Parameters**:
   - `file` (required, form field): Source image file
-  - `target_ids` (optional, query parameter): Comma-separated target IDs to search
+  - `target_ids` (optional, query parameter): Comma-separated target IDs to
+    search (default: all). Any id that isn't indexed gets a 404 naming it
   - `return_heatmap` (optional, query parameter): Include base64-encoded heatmap (default: false)
 
 **Example:**
@@ -440,7 +456,8 @@ curl -X POST "http://localhost:8000/match?target_ids=suspect_photo_001,suspect_p
     "coherent_regions": 1,
     "significant_regions": 1
   },
-  "heatmap_base64": "iVBORw0KGgoAAAANSUhEUgAA..."
+  "heatmap_base64": "iVBORw0KGgoAAAANSUhEUgAA...",
+  "unavailable_targets": []
 }
 ```
 
@@ -465,11 +482,15 @@ curl -X POST "http://localhost:8000/match?target_ids=suspect_photo_001,suspect_p
   - `source_bbox`/`target_bbox`: Bounding boxes (x, y, width, height)
 - `stats`: Search statistics
 - `heatmap_base64`: Base64-encoded PNG heatmap (if requested)
+- `unavailable_targets`: Searched targets whose image file is missing (see
+  `GET /targets`); they can't produce a match, so `detected: false` says
+  nothing about them
 
 **Status Codes:**
 - `200 OK`: Matching completed
 - `400 Bad Request`: Invalid image or parameters
 - `401 Unauthorized`: API key required and missing or wrong
+- `404 Not Found`: A `target_ids` entry isn't indexed (the detail lists them)
 - `413 Payload Too Large`: File over 50 MB or image over the pixel cap
 - `500 Internal Server Error`: Matching failed
 - `503 Service Unavailable`: Engine busy past the lock timeout
