@@ -57,6 +57,8 @@ expose. On the synthetic benchmark
 - The REST API ran indexing and matching on the event loop, which blocked health checks; they now run in a worker thread. Auto-generated image ids (`img_{count}`) collided after deletions; they're now random.
 - Index files are written with `os.replace` from the same directory (actually atomic). The old version deleted the existing files first, and loading still supported pickle.
 - API docs and README sent `image_id`, `target_ids` and `return_heatmap` as form fields, which the API ignored; they're query parameters.
+- `python -m splicetrail.bench.download` with an expired or revoked Kaggle token retries once without it (public datasets download anonymously) and otherwise exits with a message saying how to refresh the token, instead of a raw HTTP 404.
+- The `bench` and `full` extras install `six`, which `kaggle` 2.2.x imports without declaring; without it the kaggle client failed with `No module named 'six'`.
 
 ### Added
 - **Perceptual image hashes for checking images against known-hash lists** (`splicetrail.hashing`, `splicetrail hash`, `POST /hash`). PDQ (Meta's `pdqhash`, the format of ThreatExchange lists), pHash (`imagehash`) and, if you install libpHash yourself (GPLv3, never shipped), libpHash's `ph_dct_imagehash` as `phash-lib`. Lists are CSV (`algorithm,hash,id`); matches are within 31 bits for PDQ and 10 for pHash, PDQ hashes below quality 50 are skipped, and `--thorough` also hashes the eight rotations and flips. PDQ is checked against Meta's published reference hashes. Optional extra: `pip install "splicetrail[hash]"`.
