@@ -74,9 +74,29 @@ def _download_with_token(ref: str, target: Path, token: str) -> None:
 
     archive = target / "archive.zip"
     url = f"https://www.kaggle.com/api/v1/datasets/download/{ref}"
-    with requests.get(
+    response = requests.get(
         url, headers={"Authorization": f"Bearer {token}"}, stream=True, timeout=60
-    ) as response:
+    )
+    if response.status_code in (401, 403, 404):
+        # A stale or revoked token gets 401/403/404 even for public datasets,
+        # which Kaggle also serves without authentication: retry once without it.
+        first = response.status_code
+        response.close()
+        print(
+            f"Kaggle rejected the token (HTTP {first}); retrying without it",
+            file=sys.stderr,
+        )
+        response = requests.get(url, stream=True, timeout=60)
+        if not response.ok:
+            second = response.status_code
+            response.close()
+            raise SystemExit(
+                f"Kaggle refused {ref}: HTTP {first} with your token, HTTP {second} "
+                "without it. Either the token is expired or revoked, or the dataset "
+                "is gone. Create a new token at kaggle.com -> Settings -> API and put "
+                "it in KAGGLE_API_TOKEN or ~/.kaggle/access_token."
+            )
+    with response:
         response.raise_for_status()
         with open(archive, "wb") as f:
             for chunk in response.iter_content(chunk_size=1 << 20):
@@ -113,7 +133,9 @@ def download(name: str) -> Path:
 
 def main(argv=None):
     parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+        prog="python -m splicetrail.bench.download",
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     parser.add_argument("dataset", choices=sorted(DATASETS))
     args = parser.parse_args(argv)
