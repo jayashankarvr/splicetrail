@@ -2,58 +2,63 @@
 
 Finds where a small region of an image was copied from, across a collection of images or within one image, even after recoloring, JPEG recompression and shrinking. Every reported region comes with a significance score (an a-contrario NFA) you can put in a report.
 
-The default search covers the common edits and is quick; `--thorough` also checks mirrored, enlarged and rotated copies at about 13x the time (see [Quick or Thorough](#quick-or-thorough)).
+The default search covers the common edits and is quick; `--thorough` also checks mirrored, enlarged and rotated copies at about 9x the time (see [Quick or Thorough](#quick-or-thorough)).
 
 ## Install
 
 ```bash
-pip install -e .
-# or when published:
 pip install splicetrail
 
-# With optional features:
-pip install splicetrail[api]    # REST API
-pip install splicetrail[bench]  # Benchmark harness (OpenCV baseline)
-pip install splicetrail[hash]   # Perceptual image hashes (PDQ, pHash)
-pip install splicetrail[full]   # Everything
+# With optional features (quote the brackets; zsh treats them as a glob):
+pip install "splicetrail[api]"    # REST API
+pip install "splicetrail[bench]"  # Benchmark harness (OpenCV baseline)
+pip install "splicetrail[hash]"   # Perceptual image hashes (PDQ, pHash)
+pip install "splicetrail[full]"   # Everything
+
+# From a source checkout, with the development tools:
+pip install -e ".[dev]"
 ```
 
-Requires: numpy, scipy, pillow, scikit-learn, faiss-cpu, click
+Requires Python 3.9-3.13 and: numpy, scipy, pillow, scikit-learn, faiss-cpu, click
 
 ## Quick Start
 
 ### Option 1: Docker (Recommended)
 
+The API has no authentication unless `SPLICETRAIL_API_KEY` is set (see
+[REST API](#rest-api)).
+
 ```bash
-# Start the API server
-docker-compose up
+# Start the API server (published on 127.0.0.1:8000, index kept in a volume)
+export SPLICETRAIL_API_KEY="$(openssl rand -hex 32)"
+docker compose up
 
 # Index an image
 curl -X POST "http://localhost:8000/index?image_id=target_001" \
-  -F "file=@target.jpg"
+  -H "X-API-Key: $SPLICETRAIL_API_KEY" -F "file=@target.jpg"
 
 # Match a source image
 curl -X POST "http://localhost:8000/match?return_heatmap=true" \
-  -F "file=@source.jpg"
+  -H "X-API-Key: $SPLICETRAIL_API_KEY" -F "file=@source.jpg"
 ```
 
 ### Option 2: Python Module
 
 ```bash
-# Start API server
+# Start API server (listens on 127.0.0.1 only)
 python -m splicetrail serve --port 8000
 
 # Show version
 python -m splicetrail version
 
-# Run tests
+# Run the test suite (source checkout with pip install -e ".[dev]" only)
 python -m splicetrail test
 ```
 
 ### Option 3: Makefile
 
 ```bash
-make install      # Install in development mode
+make install-dev  # Install in development mode with every extra
 make test         # Run tests
 make serve        # Start API server
 make docker-build # Build Docker image
@@ -153,7 +158,8 @@ copies. Repetitive texture (brick, gravel, lattices) matches itself at many
 offsets, so a region only counts when its offset clearly beats every other
 offset its patches support - a region-level ratio test. On 60 recolored
 real-photo copy-moves plus 60 clean crops it reports no false regions at any
-threshold and finds 70-82% of the copies (NFA 1e-4 to 10). Content that really
+threshold and finds 70-82% of the copies (NFA 1e-4 to 10;
+`python -m splicetrail.bench.runner --dataset photos --task copymove --n 60 --negatives 60 --calibrate`). Content that really
 is duplicated is still reported: scikit-image's `grass` and `gravel` photos
 each contain a cloned strip, and SpliceTrail finds them, so the benchmark leaves
 those photos out.
@@ -165,7 +171,8 @@ matches its own mirror image. Its two halves sit side by side on the same
 rows, so mirrored regions shaped like that are dropped. The price is a
 mirrored copy pasted right beside its source at the same height, which looks
 exactly like a symmetric object: 1 of 40 copies in the mirrored copy-move
-benchmark (found at NFA 1e-3: 72.5% -> 70%, still no false regions).
+benchmark when this rule was added (found at NFA 1e-3: 72.5% -> 70%, still no
+false regions; `--dataset photos --task copymove --flip --thorough --calibrate`).
 
 #### JPEG-Aware Noise
 
@@ -202,8 +209,10 @@ engine = ForensicsEngine(Config(thorough=True))   # CLI: splicetrail match --tho
 
 Not checked even with `thorough`: a copy that is both rotated and rescaled;
 rotated or rescaled copies within one image (copy-move gets mirroring only);
-non-uniform scaling, shear or perspective. `thorough` takes about 13x as long
-as the default and holds a second index (about twice the memory); a thorough
+non-uniform scaling, shear or perspective. `thorough` takes about 9x as long
+as the default (11.5 s against 1.3 s per pair on 10 + 10 photo splices:
+`python -m splicetrail.bench.runner --dataset photos --n 10 --negatives 10 --no-baselines`,
+with and without `--thorough`) and holds a second index (about twice the memory); a thorough
 `splicetrail index` writes `.rotated.*` files next to the usual three, which belong
 with it.
 
@@ -217,9 +226,10 @@ the index. The pieces can also be switched on one by one
 
 `Config(flip_invariant=True)` (part of `thorough`) also searches the mirrored
 query, so a fragment that was flipped before pasting is found
-(`Match.mirrored`, `CoherentRegion.mirrored`). On photo splices where half the
-fragments are mirrored it doubles recall (0.45 -> 0.90); on copy-move in real
-photos it adds no false alarms. It takes about 1.5x as long (the mirrored pass
+(`Match.mirrored`, `CoherentRegion.mirrored`). Measured during development on
+photo splices where half the fragments are mirrored (`--dataset photos --flip`
+in the benchmark runner), it doubled recall (0.45 -> 0.90); on copy-move in
+real photos it added no false alarms. It takes about 1.5x as long (the mirrored pass
 runs on a second thread).
 
 #### Rotated Copies (experimental)
@@ -230,10 +240,11 @@ translation (it indexes targets at full size only; the pyramid isn't supported
 yet). The ring descriptor doesn't change when a patch turns, and each match's
 angle is measured by aligning the two sets of rings, so no per-patch
 orientation has to be estimated. On 20 photo splices rotated by up to 180
-degrees (plus 20 unrelated pairs) it finds 60% at NFA < 10^-3 with IoU 0.51,
-AUC 0.995 and no false regions, against 50% / 0.34 / 0.84 with the earlier
-design that turned each patch to its own estimated orientation. It's off by
-default because it is slower (about 20 s per 192 px pair) and has limits:
+degrees (plus 20 unrelated pairs) it found 60% at NFA < 10^-3 with IoU 0.51,
+AUC 0.995 and no false regions when measured during development (the ring
+design replaced one that turned each patch to its own estimated orientation;
+see the CHANGELOG for 0.3.0). It's off by default because it is slower (about
+20 s per 192 px pair) and has limits:
 
 - The rings read about twice the patch width, so a copy narrower than about
   17 px (patch 5) can't be found.
@@ -258,10 +269,12 @@ default because it is slower (about 20 s per 192 px pair) and has limits:
 
 The index (`index_type`, default `"ivfpq"`) stores descriptors with product
 quantization in an inverted file once `ivf_train_size` patches (default
-50,000) are indexed; below that, search is exact. On 200,000 descriptors it is
-5x smaller (4.3 vs 21.6 MB) and searches 22x faster; on real-photo splices
-forced to use it, results matched the exact index (IoU 0.818, recall 0.975,
-no false regions). Only candidate generation is approximate - every
+50,000) are indexed; below that, search is exact. On 200,000 descriptors from
+the benchmark photos it was 3.6x smaller than the exact index (6.0 vs 21.6 MB)
+and answered 20,000 queries about 45x faster
+(`python -m splicetrail.bench.index_size`; timings depend on the machine).
+During development, real-photo splices forced to use it gave the same results
+as the exact index (IoU 0.818, recall 0.975, no false regions). Only candidate generation is approximate - every
 candidate is still verified against real pixels. `index_type="flat"` keeps
 search exact at any size.
 
@@ -272,9 +285,10 @@ which is most of the memory regardless of the index.
 
 Targets are indexed at full, 3/4 and 1/2 size by default, so a copy that was
 shrunk before pasting is still found. Matches record the level they came from
-in `target_scale`. On 60 spliced + 60 unrelated CASIA v2 pairs this took IoU
-from 0.27 to 0.37 and recall from 0.29 to 0.39 with no extra false regions
-(1 in 120 pairs either way), for about 17% more time per image.
+in `target_scale`. When this became the default (measured during development
+on 60 spliced + 60 unrelated CASIA v2 pairs) it took IoU from 0.27 to 0.37 and
+recall from 0.29 to 0.39 with no extra false regions (1 in 120 pairs either
+way), for about 17% more time per image.
 
 ```python
 config = Config(pyramid_scales=[1.0, 0.5, 0.25])   # or pyramid_enabled=False
@@ -286,7 +300,9 @@ The pyramid only covers copies that got smaller. For copies that were enlarged,
 those sizes. Each extra scale is another full search, and the NFA is
 multiplied by the number of passes. On 40 + 40 CASIA v2 pairs it raised the
 share of splices found from 47.5% to 50% (57.5% at NFA < 1) at over 4x the
-time, so it's off by default and part of `thorough`.
+time, so it's off by default and part of `thorough`. To reproduce, compare
+`python -m splicetrail.bench.runner --dataset casia2 --n 40 --negatives 40 --calibrate`
+with the same command plus `--query-scales 1.0 0.75 0.5`.
 
 #### Heatmap and Report
 
@@ -320,22 +336,45 @@ first time a target is needed, so keep the indexed files where they were.
 
 ### REST API
 
+**Without `SPLICETRAIL_API_KEY` there is no authentication:** anyone who can
+reach the port can index, match and delete images. The server therefore
+listens on `127.0.0.1` by default, and warns when started on another address
+without a key. With the key set, every request needs an `X-API-Key` header,
+except the probes `/health/live` and `/health/ready`.
+
 ```bash
-# Start the API server
+# Local use (127.0.0.1:8000, no key needed)
 python -m splicetrail serve --port 8000
 
-# Or using Docker
-docker-compose up
+# Reachable from other machines: set a key, then send it with every request
+export SPLICETRAIL_API_KEY="$(openssl rand -hex 32)"
+python -m splicetrail serve --host 0.0.0.0 --port 8000
+curl -H "X-API-Key: $SPLICETRAIL_API_KEY" http://localhost:8000/health
 
-# Or with custom config via environment variables
-export SPLICETRAIL_PATCH_SIZE=4
-export SPLICETRAIL_MAX_TARGETS=200
+# Keep the index across restarts
+export SPLICETRAIL_INDEX_DIR=/var/lib/splicetrail
 python -m splicetrail serve
 ```
 
+Server settings (engine settings are under [Environment Variables](#environment-variables)):
+
+| Variable | Default | Effect |
+|---|---|---|
+| `SPLICETRAIL_API_KEY` | unset: no authentication | Require `X-API-Key` on every endpoint but the two probes (401 otherwise) |
+| `SPLICETRAIL_INDEX_DIR` | unset: in memory, lost on restart | Load the index from this directory at startup and save it after every index and delete; indexed images are kept there as PNGs |
+| `SPLICETRAIL_MAX_TARGETS` | 1000 | Past this many targets, the oldest is evicted |
+| `SPLICETRAIL_MAX_IMAGE_PIXELS` | 500000 | Larger `/index` and `/match` uploads get 413 |
+| `SPLICETRAIL_LOCK_TIMEOUT` | 30 | Seconds a request waits for the engine before 503 |
+
+Uploads are capped at 50 MB. Requests that use the engine take turns, and one
+that has started can't be cancelled; it finishes even if the client goes
+away, which is why the pixel cap exists. `/hash?algorithm=photodna` needs both
+`SPLICETRAIL_API_KEY` and `SPLICETRAIL_PHOTODNA_KEY`. Details, status codes and
+examples: [docs/API.md](docs/API.md); security notes: [SECURITY.md](SECURITY.md).
+
 **API Endpoints:**
 - `GET /` - Health check
-- `GET /health` - Comprehensive health info
+- `GET /health` - Health, index counts, target cap, whether the index is persistent
 - `GET /health/live` - Kubernetes liveness probe
 - `GET /health/ready` - Kubernetes readiness probe
 - `GET /config` - Get current configuration
@@ -343,6 +382,7 @@ python -m splicetrail serve
 - `POST /match` - Match an image against indexed targets
 - `GET /targets` - List indexed images
 - `DELETE /targets/{id}` - Remove an indexed image
+- `POST /hash` - Perceptual hashes, checked against the server's hash list
 
 **Interactive Docs:** `http://localhost:8000/docs`
 **API Documentation:** See [docs/API.md](docs/API.md) for details
@@ -350,18 +390,21 @@ python -m splicetrail serve
 #### Example: Python Client
 
 ```python
+import os
 import requests
 
 BASE_URL = "http://localhost:8000"
+HEADERS = {"X-API-Key": os.environ.get("SPLICETRAIL_API_KEY", "")}
 
 # Index a target
 with open("target.jpg", "rb") as f:
-    response = requests.post(f"{BASE_URL}/index", params={"image_id": "target_001"}, files={"file": f})
+    response = requests.post(f"{BASE_URL}/index", params={"image_id": "target_001"},
+                             files={"file": f}, headers=HEADERS)
     print(response.json())
 
 # Match a source
 with open("source.jpg", "rb") as f:
-    result = requests.post(f"{BASE_URL}/match", files={"file": f}).json()
+    result = requests.post(f"{BASE_URL}/match", files={"file": f}, headers=HEADERS).json()
 
 if result["detected"]:
     for region in result["coherent_regions"]:
@@ -387,25 +430,39 @@ export SPLICETRAIL_THOROUGH=true            # Also check mirrored, enlarged and 
 export SPLICETRAIL_MAX_TARGETS=1000         # Evict least recently indexed targets
 ```
 
+The API server's own settings (`SPLICETRAIL_API_KEY`, `SPLICETRAIL_INDEX_DIR`
+and the limits) are listed under [REST API](#rest-api).
+
 ### Deployment
 
 #### Docker
+
+The image runs the server on `0.0.0.0` inside the container and keeps the
+index in `/data` (`SPLICETRAIL_INDEX_DIR=/data`), so mount a volume there.
+Publish the port on the host's loopback, or set `SPLICETRAIL_API_KEY`.
 
 ```bash
 # Build image
 docker build -t splicetrail .
 
-# Run container
-docker run -p 8000:8000 -v ./data:/data splicetrail
+# Run container: loopback only, key required, index persisted in ./data
+docker run -p 127.0.0.1:8000:8000 -e SPLICETRAIL_API_KEY -v ./data:/data splicetrail
 
-# Or use docker-compose
-docker-compose up
+# Or use docker compose (publishes 127.0.0.1:8000, named volume for /data,
+# passes SPLICETRAIL_API_KEY through from the shell or an .env file)
+docker compose up
 
-# With Nginx reverse proxy
-docker-compose --profile with-nginx up
+# With Nginx reverse proxy (publishes port 80 on every interface: set
+# SPLICETRAIL_API_KEY first, and enable HTTPS in nginx.conf)
+docker compose --profile with-nginx up
 ```
 
 #### Kubernetes
+
+Each server process holds its own index, so run one replica: more replicas
+would each have different targets (a shared index isn't supported). Keep the
+index on a PersistentVolumeClaim through `SPLICETRAIL_INDEX_DIR`, and use the
+`Recreate` strategy so an old and a new pod never write the same index.
 
 ```yaml
 apiVersion: apps/v1
@@ -413,7 +470,9 @@ kind: Deployment
 metadata:
   name: splicetrail-api
 spec:
-  replicas: 3
+  replicas: 1   # the index is per process; scaling out isn't supported
+  strategy:
+    type: Recreate
   selector:
     matchLabels:
       app: splicetrail
@@ -430,6 +489,13 @@ spec:
         env:
         - name: SPLICETRAIL_MAX_TARGETS
           value: "100"
+        - name: SPLICETRAIL_INDEX_DIR
+          value: /data
+        - name: SPLICETRAIL_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: splicetrail
+              key: api-key
         livenessProbe:
           httpGet:
             path: /health/live
@@ -464,7 +530,7 @@ it, so every algorithm here comes from its reference library:
 
 | Algorithm | What it is | Bits | Comes from | Match at distance |
 |---|---|---|---|---|
-| `pdq` | Meta's PDQ, the format of ThreatExchange lists | 256 | `pdqhash` (MIT, bundling Meta's BSD C++), `pip install splicetrail[hash]` | 31 or less |
+| `pdq` | Meta's PDQ, the format of ThreatExchange lists | 256 | `pdqhash` (MIT, bundling Meta's BSD C++), `pip install "splicetrail[hash]"` | 31 or less |
 | `phash` | DCT pHash as computed by the Python `imagehash` library | 64 | `imagehash`, same extra | 10 or less |
 | `phash-lib` | `ph_dct_imagehash` from libpHash (phash.org), for databases built with the C library | 64 | your own libpHash install | 10 or less |
 | `photodna` | Microsoft PhotoDNA | - | Microsoft's PhotoDNA Cloud Service | decided by the service |
@@ -623,10 +689,12 @@ on one of several datasets:
 reports false regions per image pair (should stay at or below the threshold)
 next to recall. On 40 photo splices + 40 unrelated pairs at JPEG quality 75 it
 reports no false regions at any threshold up to 10 and 92.5% recall from
-NFA < 10^-4 on.
+NFA < 10^-4 on
+(`python -m splicetrail.bench.runner --dataset photos --n 40 --negatives 40 --jpeg 75 --calibrate`).
 
 Synthetic run (96x96 images, 24x24 splice, color grade 0.15, 20 spliced + 20
-clean pairs):
+clean pairs; `python -m splicetrail.bench.runner --n 20 --negatives 20`, plus
+`--jpeg 85` for the second row):
 
 | | IoU | Precision | Recall | Detection AUC | s / image |
 |---|---|---|---|---|---|
@@ -640,7 +708,9 @@ note above). Synthetic data is a sanity check, not a substitute for a real foren
 dataset.
 
 **CASIA v2** (real cross-image splices with their actual donor images; 40
-spliced + 40 unrelated pairs, `--dataset casia2`):
+spliced + 40 unrelated pairs,
+`python -m splicetrail.bench.runner --dataset casia2 --n 40 --negatives 40 --calibrate`;
+the baseline row used `--n 60 --negatives 60`):
 
 | | IoU | Precision | Recall | Detection AUC | Found at NFA < 10^-3 | s / image |
 |---|---|---|---|---|---|---|
@@ -655,9 +725,15 @@ of CASIA's splices are scaled up 1.15-2.5x), nearly flat regions with no
 texture to match, and very small splices. `query_scales=[1.0, 0.75, 0.5]`
 covers enlarged copies; on the same pairs it raises the share found to 50%
 (57.5% at NFA < 1) but adds misplaced regions on spliced images and takes
-over 4x as long, so it stays opt-in.
+over 4x as long, so it stays opt-in (same command plus
+`--query-scales 1.0 0.75 0.5`).
 
-**Copy-move** (`--task copymove` on photos, or the standard sets):
+**Copy-move** (`--task copymove` on photos, or the standard sets). Each row is
+`python -m splicetrail.bench.runner --calibrate` with, in order:
+`--dataset photos --task copymove --n 60 --negatives 60`;
+`--dataset comofod --category translation|rotation|scaling --n 25 --negatives 25`;
+`--dataset coverage --n 100 --negatives 100`. "Found" is recall in the
+calibration table at that NFA.
 
 | Dataset | Found at NFA < 10^-3 | Found at NFA < 1 | Clean images with an alarm (NFA < 10^-3) |
 |---|---|---|---|
@@ -673,9 +749,10 @@ images in CoMoFoD and COVERAGE are full of objects that genuinely repeat
 (identical printed logos, rows of windows, similar-but-genuine objects by
 design in COVERAGE). Those are real duplicates as far as pixels go, and SpliceTrail
 can't yet tell them from a pasted copy; that, more than chance, is where the
-alarms on clean images come from. Splitting a match cluster into connected
-parts finds many more copies (CoMoFoD translation 40% -> 84%) but also flags
-12-28% of the clean images, so it is used for cross-image search only.
+alarms on clean images come from. During development, splitting a match
+cluster into connected parts found many more copy-moves but also flagged
+12-28% of the clean images, so it is used for cross-image search only (see
+the CHANGELOG for 0.3.0).
 
 ## Project structure
 
@@ -703,10 +780,12 @@ src/splicetrail/
 ## Development
 
 ```bash
-pip install -e ".[dev,api,bench]"
-pytest tests/
-ruff check src/
+pip install -e ".[dev,api,hash,bench]"   # or: make install-dev
+pytest tests/                            # or: make test
+make lint                                # ruff, black --check, mypy
 ```
+
+See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
