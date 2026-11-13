@@ -371,7 +371,7 @@ def test_targets_hide_server_paths(sample, tmp_path, monkeypatch):
     )
     r = client.get("/targets")
     (target,) = r.json()["targets"]
-    assert set(target) == {"image_id", "shape"}
+    assert set(target) == {"image_id", "shape", "image_available"}
     assert target["shape"] == {"height": 96, "width": 96}
     assert str(tmp_path) not in r.text and ".png" not in r.text
 
@@ -507,8 +507,8 @@ def test_crash_mid_save_keeps_previous_state(sample, tmp_path, monkeypatch):
 
     real_save = ForensicsEngine.save
 
-    def crashing_save(self, path):
-        real_save(self, path)
+    def crashing_save(self, path, **kwargs):
+        real_save(self, path, **kwargs)
         with open(f"{path}.engine.json", "w") as f:
             f.write("{half")  # torn write, then the process dies
         raise OSError("disk went away")
@@ -547,3 +547,73 @@ def test_ready_checks_index_dir(tmp_path, monkeypatch):
     assert client.get("/health/ready").json()["storage_free_mb"] >= 0
     with mock.patch.object(api.os, "access", return_value=False):
         assert client.get("/health/ready").status_code == 503
+
+
+def _index(client, image_id, image):
+    r = client.post("/index", params={"image_id": image_id}, files={"file": _png(image)})
+    assert r.status_code == 200, r.text
+
+
+def test_moved_index_dir_keeps_images(sample, tmp_path, monkeypatch):
+    a, b = tmp_path / "a", tmp_path / "b"
+    _index(_persistent_app(monkeypatch, a), "t0", sample.donor)
+    os.rename(a, b)
+
+    client = _persistent_app(monkeypatch, b)
+    _index(client, "t1", sample.tampered)
+    assert len(os.listdir(b / "images")) == 2
+
+    restarted = _persistent_app(monkeypatch, b)
+    body = restarted.post(
+        "/match", params={"target_ids": "t0"}, files={"file": _png(sample.tampered)}
+    ).json()
+    assert body["detected"] and body["coherent_regions"][0]["image_id"] == "t0"
+
+
+def test_snapshot_stores_image_names_not_paths(sample, tmp_path, monkeypatch):
+    import json
+
+    _index(_persistent_app(monkeypatch, tmp_path), "t0", sample.donor)
+    snap = (tmp_path / "CURRENT").read_text()
+    targets = json.loads((tmp_path / snap / "engine.engine.json").read_text())[
+        "targets"
+    ]
+    assert not os.path.isabs(targets[0][1])
+    assert os.sep not in targets[0][1]
+
+
+def test_legacy_absolute_paths_rebase_onto_moved_dir(sample, tmp_path, monkeypatch):
+    import json
+
+    a, b = tmp_path / "a", tmp_path / "b"
+    _index(_persistent_app(monkeypatch, a), "t0", sample.donor)
+    # Rewrite the snapshot the way 0.2 stored it: absolute paths under a/.
+    bundle = a / (a / "CURRENT").read_text() / "engine.engine.json"
+    state = json.loads(bundle.read_text())
+    for row in state["targets"]:
+        row[1] = str(a / "images" / row[1])
+    bundle.write_text(json.dumps(state))
+    os.rename(a, b)
+
+    client = _persistent_app(monkeypatch, b)
+    _index(client, "t1", sample.tampered)  # saves and prunes
+    assert len(os.listdir(b / "images")) == 2
+    body = client.post(
+        "/match", params={"target_ids": "t0"}, files={"file": _png(sample.tampered)}
+    ).json()
+    assert body["detected"]
+
+
+def test_missing_target_image_is_reported(sample, tmp_path, monkeypatch, caplog):
+    _index(_persistent_app(monkeypatch, tmp_path), "t0", sample.donor)
+    for name in os.listdir(tmp_path / "images"):
+        os.remove(tmp_path / "images" / name)
+
+    with caplog.at_level(logging.WARNING, logger="splicetrail"):
+        client = _persistent_app(monkeypatch, tmp_path)
+    assert "t0" in caplog.text and "image file" in caplog.text
+    (target,) = client.get("/targets").json()["targets"]
+    assert target["image_available"] is False
+    body = client.post("/match", files={"file": _png(sample.tampered)}).json()
+    assert not body["detected"]
+    assert body["unavailable_targets"] == ["t0"]

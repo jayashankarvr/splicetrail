@@ -1402,13 +1402,19 @@ class ForensicsEngine:
     # Persistence
     # ------------------------------------------------------------------
 
-    def save(self, path: str) -> None:
+    def save(self, path: str, image_root: Optional[str] = None) -> None:
         """
         Save the index bundle: ``{path}.index``, ``{path}.meta.json`` and
         ``{path}.engine.json`` (config + target paths and shapes).
 
         Patches aren't stored; ``load`` re-extracts them from each target's
         ``image_path`` when it's first needed.
+
+        Args:
+            path: Bundle path prefix
+            image_root: Target images directly in this directory are stored
+                by file name only, so the directory can move; pass the same
+                ``image_root`` to ``load``. Other paths are stored as given.
         """
         from splicetrail.search.index import _atomic_write, _write_json
 
@@ -1418,18 +1424,30 @@ class ForensicsEngine:
             "config": self.config.to_dict(),
             "descriptor": type(self.descriptor).__name__,
             "targets": [
-                [image_id, t.path, t.shape[0], t.shape[1], t.jpeg_sigma]
+                [
+                    image_id,
+                    _relative_to(t.path, image_root),
+                    t.shape[0],
+                    t.shape[1],
+                    t.jpeg_sigma,
+                ]
                 for image_id, t in self._targets.items()
             ],
         }
         _atomic_write(f"{path}.engine.json", lambda tmp: _write_json(tmp, state))
         if self._rotated is not None:
-            self._rotated.save(f"{path}.rotated")
+            self._rotated.save(f"{path}.rotated", image_root=image_root)
 
     @classmethod
-    def load(cls, path: str, **config_overrides) -> "ForensicsEngine":
+    def load(
+        cls, path: str, image_root: Optional[str] = None, **config_overrides
+    ) -> "ForensicsEngine":
         """
         Load a bundle written by ``save``.
+
+        With ``image_root``, stored file names resolve inside it, and an
+        absolute path (bundles from before 0.3.0) whose file name exists in
+        ``image_root`` is rebased there, so a moved directory keeps its images.
 
         ``config_overrides`` may change matching settings (thresholds, k, ...);
         settings that shape the index (patch size, stride, entropy, pyramid)
@@ -1481,7 +1499,9 @@ class ForensicsEngine:
             # Bundles written before JPEG-aware noise have no jpeg_sigma column.
             jpeg_sigma = float(rest[0]) if rest else 0.0
             engine._targets[image_id] = _Target(
-                shape=(int(h), int(w)), path=image_path, jpeg_sigma=jpeg_sigma
+                shape=(int(h), int(w)),
+                path=_resolve_in(image_path, image_root),
+                jpeg_sigma=jpeg_sigma,
             )
         if engine._rotated is not None:
             if not os.path.exists(f"{path}.rotated.engine.json"):
@@ -1493,6 +1513,7 @@ class ForensicsEngine:
             geometry = {"flip_invariant", "query_scales"}
             engine._rotated = cls.load(
                 f"{path}.rotated",
+                image_root=image_root,
                 **{k: v for k, v in overrides.items() if k not in geometry},
             )
         return engine
@@ -1575,6 +1596,34 @@ class ForensicsEngine:
     def has_target(self, image_id: str) -> bool:
         """Check if target is indexed."""
         return image_id in self._targets
+
+    def target_image_available(self, image_id: str) -> bool:
+        """
+        False if the target isn't indexed, or if its patches aren't in memory
+        and its image file is gone: such a target can never produce a match.
+        """
+        target = self._targets.get(image_id)
+        if target is None or target.levels is not None:
+            return target is not None
+        return bool(target.path) and os.path.exists(target.path)
+
+
+def _relative_to(path: Optional[str], root: Optional[str]) -> Optional[str]:
+    """``path``'s file name if it sits directly in ``root``, else ``path``."""
+    if path and root:
+        if os.path.dirname(os.path.abspath(path)) == os.path.abspath(root):
+            return os.path.basename(path)
+    return path
+
+
+def _resolve_in(path: Optional[str], root: Optional[str]) -> Optional[str]:
+    """Inverse of ``_relative_to``; also rebases old absolute paths onto ``root``."""
+    if not path or not root:
+        return path
+    if not os.path.isabs(path):
+        return os.path.join(root, path)
+    rebased = os.path.join(root, os.path.basename(path))
+    return rebased if os.path.exists(rebased) else path
 
 
 def _resize(image: np.ndarray, scale: float) -> np.ndarray:

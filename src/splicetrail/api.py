@@ -98,6 +98,8 @@ class MatchResponse(BaseModel):
     coherent_regions: List[CoherentRegionInfo] = []
     stats: Dict[str, Any]
     heatmap_base64: Optional[str] = None
+    # Targets searched that can't match because their image file is gone.
+    unavailable_targets: List[str] = []
 
 
 class IndexResponse(BaseModel):
@@ -339,11 +341,27 @@ class IndexStore:
         return os.path.join(self.root, name, "engine")
 
     def load(self, config: Config) -> Optional[ForensicsEngine]:
-        """The saved engine, or None if nothing was saved yet."""
+        """
+        The saved engine, or None if nothing was saved yet.
+
+        A target whose image file is missing stays indexed (copying the file
+        back into ``images/`` restores it) but can't match anything; it's
+        logged here, flagged in /targets and listed by /match.
+        """
         path = self._current()
         if path is None:
             return None
-        return ForensicsEngine.load(path, **config.to_dict())
+        engine = ForensicsEngine.load(path, image_root=self.images, **config.to_dict())
+        missing = [i for i in engine.target_ids if not engine.target_image_available(i)]
+        if missing:
+            logger.warning(
+                "%d indexed target(s) have no image file in %s and can't match "
+                "until it's restored: %s",
+                len(missing),
+                self.images,
+                ", ".join(missing),
+            )
+        return engine
 
     def new_image_path(self) -> str:
         return os.path.join(self.images, f"{uuid.uuid4().hex}.png")
@@ -355,7 +373,7 @@ class IndexStore:
         directory = os.path.join(self.root, name)
         os.mkdir(directory)
         try:
-            engine.save(os.path.join(directory, "engine"))
+            engine.save(os.path.join(directory, "engine"), image_root=self.images)
 
             def write_pointer(tmp):
                 with open(tmp, "w") as f:
@@ -371,10 +389,16 @@ class IndexStore:
         for entry in os.listdir(self.root):
             if entry.startswith("snap-") and entry != keep:
                 shutil.rmtree(os.path.join(self.root, entry), ignore_errors=True)
-        live = {engine.get_target_path(i) for i in engine.target_ids}
+        # By file name, not full path: a file any target names is never
+        # deleted, wherever that target thinks the directory is.
+        live = {
+            os.path.basename(path)
+            for path in map(engine.get_target_path, engine.target_ids)
+            if path
+        }
         for entry in os.listdir(self.images):
             path = os.path.join(self.images, entry)
-            if path not in live:
+            if entry not in live:
                 try:
                     os.remove(path)
                 except OSError:
@@ -698,6 +722,11 @@ def create_app(
             target_id_list = None
             if target_ids:
                 target_id_list = [t.strip() for t in target_ids.split(",")]
+            unavailable = [
+                t
+                for t in (target_id_list or engine.target_ids)
+                if not engine.target_image_available(t)
+            ]
 
             result = await run_locked(
                 engine.match,
@@ -774,6 +803,7 @@ def create_app(
                 coherent_regions=regions_info,
                 stats=result.stats,
                 heatmap_base64=heatmap_b64,
+                unavailable_targets=unavailable,
             )
 
         except ImageError as e:
@@ -914,6 +944,7 @@ def create_app(
                 {
                     "image_id": image_id,
                     "shape": {"height": shape[0], "width": shape[1]} if shape else None,
+                    "image_available": engine.target_image_available(image_id),
                 }
             )
         return {"targets": targets, "count": len(targets)}
