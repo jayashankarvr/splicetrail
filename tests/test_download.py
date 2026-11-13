@@ -95,6 +95,7 @@ def test_rejected_token_and_anonymous_failure_exits(monkeypatch, tmp_path, capsy
         download._download_with_token("owner/data", tmp_path, "s3cret-token")
     message = str(exc.value)
     assert "owner/data" in message and "Settings -> API" in message
+    assert "KAGGLE_ACCESS_TOKEN" in message
     assert "s3cret-token" not in message
     out = capsys.readouterr()
     assert "s3cret-token" not in out.out + out.err
