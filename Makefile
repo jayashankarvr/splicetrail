@@ -82,7 +82,7 @@ docker-build:
 	docker build -t splicetrail:latest .
 
 docker-run:
-	docker run -p 8000:8000 splicetrail:latest
+	docker run -p 127.0.0.1:8000:8000 splicetrail:latest
 
 # Quick checks before commit
 check: format lint test
