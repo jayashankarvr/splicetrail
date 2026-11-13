@@ -31,7 +31,7 @@ Paste the full error traceback here
 **Environment:**
  - OS: [e.g. Ubuntu 22.04]
  - Python version: [e.g. 3.11]
- - SpliceTrail version: [e.g. 0.2.0]
+ - SpliceTrail version: [e.g. 0.3.0]
  - Installation method: [pip, git clone]
 
 **Additional context**
