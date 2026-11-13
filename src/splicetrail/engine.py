@@ -1439,19 +1439,15 @@ class ForensicsEngine:
             self._rotated.save(f"{path}.rotated", image_root=image_root)
 
     @classmethod
-    def load(
-        cls, path: str, image_root: Optional[str] = None, **config_overrides
-    ) -> "ForensicsEngine":
+    def load(cls, path: str, **config_overrides) -> "ForensicsEngine":
         """
         Load a bundle written by ``save``.
-
-        With ``image_root``, stored file names resolve inside it, and an
-        absolute path (bundles from before 0.3.0) whose file name exists in
-        ``image_root`` is rebased there, so a moved directory keeps its images.
 
         ``config_overrides`` may change matching settings (thresholds, k, ...);
         settings that shape the index (patch size, stride, entropy, pyramid)
         always come from the bundle so the stored descriptors stay valid.
+        Image paths are as stored; a bundle saved with ``image_root`` needs
+        ``rebase_images`` with the same directory.
         """
         try:
             with open(f"{path}.engine.json") as f:
@@ -1500,7 +1496,7 @@ class ForensicsEngine:
             jpeg_sigma = float(rest[0]) if rest else 0.0
             engine._targets[image_id] = _Target(
                 shape=(int(h), int(w)),
-                path=_resolve_in(image_path, image_root),
+                path=image_path,
                 jpeg_sigma=jpeg_sigma,
             )
         if engine._rotated is not None:
@@ -1513,7 +1509,6 @@ class ForensicsEngine:
             geometry = {"flip_invariant", "query_scales"}
             engine._rotated = cls.load(
                 f"{path}.rotated",
-                image_root=image_root,
                 **{k: v for k, v in overrides.items() if k not in geometry},
             )
         return engine
@@ -1597,6 +1592,18 @@ class ForensicsEngine:
         """Check if target is indexed."""
         return image_id in self._targets
 
+    def rebase_images(self, image_root: str) -> None:
+        """
+        Resolve target images against ``image_root`` after ``load``: file
+        names stored by ``save(..., image_root=...)`` resolve inside it, and an
+        absolute path (bundles from before 0.3.0) whose file name exists in
+        ``image_root`` is rebased there, so a moved directory keeps its images.
+        """
+        for target in self._targets.values():
+            target.path = _resolve_in(target.path, image_root)
+        if self._rotated is not None:
+            self._rotated.rebase_images(image_root)
+
     def target_image_available(self, image_id: str) -> bool:
         """
         False if the target isn't indexed, or if its patches aren't in memory
@@ -1605,7 +1612,7 @@ class ForensicsEngine:
         target = self._targets.get(image_id)
         if target is None or target.levels is not None:
             return target is not None
-        return bool(target.path) and os.path.exists(target.path)
+        return target.path is not None and os.path.exists(target.path)
 
 
 def _relative_to(path: Optional[str], root: Optional[str]) -> Optional[str]:

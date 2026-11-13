@@ -357,7 +357,8 @@ class IndexStore:
         path = self._current()
         if path is None:
             return None
-        engine = ForensicsEngine.load(path, image_root=self.images, **config.to_dict())
+        engine = ForensicsEngine.load(path, **config.to_dict())
+        engine.rebase_images(self.images)
         missing = [i for i in engine.target_ids if not engine.target_image_available(i)]
         if missing:
             logger.warning(
