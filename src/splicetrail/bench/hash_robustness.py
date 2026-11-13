@@ -136,7 +136,8 @@ def format_table(worst, closest) -> str:
 
 def main(argv=None) -> None:
     p = argparse.ArgumentParser(
-        description="Perceptual hash distances on the scikit-image photos"
+        prog="python -m splicetrail.bench.hash_robustness",
+        description="Perceptual hash distances on the scikit-image photos",
     )
     p.add_argument(
         "--algorithm",

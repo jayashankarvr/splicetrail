@@ -182,7 +182,10 @@ def _engine_config(args):
 
 
 def main(argv=None):
-    p = argparse.ArgumentParser(description="SpliceTrail benchmark runner")
+    p = argparse.ArgumentParser(
+        prog="python -m splicetrail.bench.runner",
+        description="SpliceTrail benchmark runner",
+    )
     p.add_argument(
         "--dataset",
         default="synthetic",

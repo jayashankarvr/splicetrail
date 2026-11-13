@@ -79,7 +79,10 @@ def measure(
 
 
 def main(argv=None) -> Dict[str, Dict[str, float]]:
-    p = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    p = argparse.ArgumentParser(
+        prog="python -m splicetrail.bench.index_size",
+        description=__doc__.splitlines()[0],
+    )
     p.add_argument("--n", type=int, default=200_000, help="descriptors indexed")
     p.add_argument("--queries", type=int, default=20_000, help="query descriptors")
     p.add_argument("--k", type=int, default=8, help="neighbours per query")
