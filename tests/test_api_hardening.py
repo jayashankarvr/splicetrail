@@ -376,6 +376,11 @@ def test_targets_hide_server_paths(sample, tmp_path, monkeypatch):
     assert str(tmp_path) not in r.text and ".png" not in r.text
 
 
+def test_lifespan_sets_start_time():
+    with TestClient(create_app()) as client:
+        assert client.get("/health").json()["uptime_seconds"] >= 0
+
+
 # --- 8. PhotoDNA gated -------------------------------------------------------
 
 

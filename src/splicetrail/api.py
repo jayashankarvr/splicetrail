@@ -10,7 +10,9 @@ import math
 import os
 import shutil
 import threading
+import time
 import uuid
+from contextlib import asynccontextmanager
 from dataclasses import replace
 from typing import Optional, List, Dict, Any, Tuple
 import numpy as np
@@ -415,10 +417,17 @@ def create_app(
     )
     index_dir = os.environ.get("SPLICETRAIL_INDEX_DIR") or None
 
+    @asynccontextmanager
+    async def lifespan(app):
+        # Record service start time for the uptime in /health.
+        app.state.start_time = time.time()
+        yield
+
     app = FastAPI(
         title="SpliceTrail Forensics API",
         description="REST API: find where image regions were copied from",
         version=__version__,
+        lifespan=lifespan,
     )
     app.add_middleware(
         _RequestGuard,
@@ -504,14 +513,6 @@ def create_app(
             store.save(engine)
         return removed
 
-    # Track service start time for uptime calculation
-    @app.on_event("startup")
-    async def startup_event():
-        """Record service start time."""
-        import time
-
-        app.state.start_time = time.time()
-
     @app.get("/")
     async def root():
         """API health check."""
@@ -578,8 +579,6 @@ def create_app(
         - Memory usage (if available)
         - Configuration
         """
-        import time
-
         health_info = {
             "status": "healthy",
             "version": __version__,
