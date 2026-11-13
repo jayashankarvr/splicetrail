@@ -1,4 +1,4 @@
-.PHONY: help install install-dev test test-cov lint format clean build publish serve docs
+.PHONY: help install install-dev test test-cov lint format clean build publish publish-test serve docker-build docker-run check version
 
 # Default target
 help:
@@ -10,7 +10,7 @@ help:
 	@echo "  make install-dev    Install with all development dependencies"
 	@echo "  make test           Run tests"
 	@echo "  make test-cov       Run tests with coverage"
-	@echo "  make lint           Run linters (ruff, mypy)"
+	@echo "  make lint           Run linters (ruff, black --check, mypy)"
 	@echo "  make format         Format code with black"
 	@echo "  make serve          Start API server (development mode)"
 	@echo ""
@@ -24,16 +24,13 @@ help:
 	@echo "  make docker-build   Build Docker image"
 	@echo "  make docker-run     Run Docker container"
 	@echo ""
-	@echo "Documentation:"
-	@echo "  make docs           Build documentation (if available)"
-	@echo ""
 
 # Installation
 install:
 	pip install -e .
 
 install-dev:
-	pip install -e ".[dev,api,bench]"
+	pip install -e ".[dev,api,hash,bench]"
 
 # Testing
 test:
@@ -44,15 +41,13 @@ test-cov:
 
 # Code quality
 lint:
-	@echo "Running ruff..."
-	ruff check src/splicetrail tests/ || true
-	@echo ""
-	@echo "Running mypy..."
-	mypy src/splicetrail --ignore-missing-imports || true
+	ruff check src tests
+	black --check src tests
+	mypy src/splicetrail
 
 format:
-	black src/splicetrail tests/
-	ruff check --fix src/splicetrail tests/ || true
+	black src tests
+	ruff check --fix src tests || true
 
 # API server
 serve:
@@ -88,10 +83,6 @@ docker-build:
 
 docker-run:
 	docker run -p 8000:8000 splicetrail:latest
-
-# Documentation
-docs:
-	@echo "Documentation target - add sphinx or mkdocs build here"
 
 # Quick checks before commit
 check: format lint test
