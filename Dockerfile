@@ -18,9 +18,9 @@ WORKDIR /build
 COPY pyproject.toml README.md ./
 COPY src/ ./src/
 
-# Install package with API dependencies
+# Install package with API and perceptual hashing dependencies (for /hash)
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir ".[api]"
+    pip install --no-cache-dir ".[api,hash]"
 
 # Runtime stage
 FROM python:3.11-slim
@@ -46,10 +46,12 @@ USER splicetrail
 # Copy application code
 COPY --chown=splicetrail:splicetrail src/ ./src/
 
-# Environment variables
+# Environment variables. The index is saved under /data (mount a volume there).
+# Set SPLICETRAIL_API_KEY at run time to require an X-API-Key header.
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    SPLICETRAIL_MAX_TARGETS=1000
+    SPLICETRAIL_MAX_TARGETS=1000 \
+    SPLICETRAIL_INDEX_DIR=/data
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
@@ -61,5 +63,6 @@ EXPOSE 8000
 # Volume for persistent data
 VOLUME ["/data"]
 
-# Run API server
+# Run API server. 0.0.0.0 is needed inside the container; publish the port
+# on the host's loopback only (see docker-compose.yml) or set an API key.
 CMD ["python", "-m", "splicetrail", "serve", "--host", "0.0.0.0", "--port", "8000"]
