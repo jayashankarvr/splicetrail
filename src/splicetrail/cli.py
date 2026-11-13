@@ -680,7 +680,11 @@ def hash_command(
 
 
 @cli.command()
-@click.option("--host", default="0.0.0.0", help="Host to bind to")
+@click.option(
+    "--host",
+    default="127.0.0.1",
+    help="Host to bind to (0.0.0.0 exposes it on every interface; set SPLICETRAIL_API_KEY first)",
+)
 @click.option("--port", "-p", default=8000, help="Port to listen on")
 @click.option(
     "--patch-size",

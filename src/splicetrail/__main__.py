@@ -41,8 +41,9 @@ For more options, use the splicetrail CLI tool (if click is installed):
     parser.add_argument(
         "--host",
         type=str,
-        default="0.0.0.0",
-        help="Host for API server (serve command)",
+        default="127.0.0.1",
+        help="Host for API server (serve command); 0.0.0.0 exposes it on every "
+        "interface, set SPLICETRAIL_API_KEY first",
     )
     parser.add_argument("images", nargs="*", help="Image files for match command")
 

@@ -25,6 +25,13 @@ def _png(array):
     return ("image.png", buf.getvalue(), "image/png")
 
 
+@pytest.fixture(autouse=True)
+def _plain_server(monkeypatch):
+    # The server reads these at create_app; keep the operator's shell out of it.
+    for name in ("SPLICETRAIL_API_KEY", "SPLICETRAIL_INDEX_DIR"):
+        monkeypatch.delenv(name, raising=False)
+
+
 @pytest.fixture(scope="module")
 def sample():
     return make_recolored_splice(seed=0, image_size=96, fragment_size=24)
@@ -186,7 +193,8 @@ def test_import_ignores_bad_hash_list(tmp_path):
 
 def test_photodna_needs_server_key(monkeypatch):
     monkeypatch.delenv("SPLICETRAIL_PHOTODNA_KEY", raising=False)
-    client = TestClient(create_app())
+    monkeypatch.setenv("SPLICETRAIL_API_KEY", "k")
+    client = TestClient(create_app(), headers={"X-API-Key": "k"})
     with mock.patch("splicetrail.photodna.PhotoDnaClient") as client_cls:
         r = client.post(
             "/hash", params={"algorithm": "photodna"}, files={"file": _bridge()}
@@ -198,7 +206,8 @@ def test_photodna_needs_server_key(monkeypatch):
 
 def test_photodna_with_server_key(monkeypatch):
     monkeypatch.setenv("SPLICETRAIL_PHOTODNA_KEY", "secret-key")
-    client = TestClient(create_app())
+    monkeypatch.setenv("SPLICETRAIL_API_KEY", "k")
+    client = TestClient(create_app(), headers={"X-API-Key": "k"})
     with mock.patch("splicetrail.photodna.PhotoDnaClient") as client_cls:
         client_cls.return_value.match.return_value = {"IsMatch": False}
         r = client.post(
