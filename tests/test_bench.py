@@ -165,3 +165,15 @@ class TestRunnerCommandLine:
         with pytest.raises(SystemExit) as exc:
             self._main_config(monkeypatch, "--query-scales", "1.0", "1.5")
         assert exc.value.code == 2
+
+
+def test_index_size_compares_flat_and_ivfpq_on_the_same_descriptors():
+    import pytest
+
+    pytest.importorskip("skimage")
+    from splicetrail.bench.index_size import measure
+
+    r = measure(n=3000, queries=200)
+    assert set(r) == {"flat", "ivfpq"}
+    assert r["ivfpq"]["size_mb"] < r["flat"]["size_mb"]
+    assert all(row["search_s"] > 0 for row in r.values())
