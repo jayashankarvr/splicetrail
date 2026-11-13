@@ -32,7 +32,7 @@ def photo_descriptors(patch_size: int = 5) -> List[Tuple[str, np.ndarray]]:
         pixels = np.asarray(image, dtype=np.float32) / 255.0
         windows = np.lib.stride_tricks.sliding_window_view(
             pixels, (patch_size, patch_size), axis=(0, 1)
-        )  # (H', W', 3, s, s)
+        )  # type: ignore[call-overload,unused-ignore]  # numpy<2.1 stubs (py3.9) reject tuple axis; (H', W', 3, s, s)
         patches = windows.reshape(-1, 3, patch_size, patch_size).transpose(0, 2, 3, 1)
         desc, textured = describe.compute_batch(patches)
         out.append((name, desc[textured]))
