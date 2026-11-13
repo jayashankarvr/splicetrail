@@ -43,7 +43,7 @@ jobs:
       # against the oldest supported Python with the mypy and numpy it resolves.
       - name: Type check (Python 3.9 target)
         if: matrix.python-version == '3.9'
-        run: mypy src/splicetrail
+        run: mypy --python-version 3.9 src/splicetrail
 
   lint:
     runs-on: ubuntu-24.04
