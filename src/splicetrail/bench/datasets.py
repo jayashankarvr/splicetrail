@@ -22,7 +22,7 @@ from __future__ import annotations
 import csv
 import os
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Callable, Dict, List, Optional, Tuple
 
 import numpy as np
 from PIL import Image
@@ -135,7 +135,9 @@ def _cut_fragment(rng, image, size, rotation, flip):
     patch = image[y : y + window, x : x + window]
     angle = float(rng.uniform(-rotation, rotation)) if rotation else 0.0
     if angle:
-        patch = np.asarray(Image.fromarray(patch).rotate(angle, resample=Image.BICUBIC))
+        patch = np.asarray(
+            Image.fromarray(patch).rotate(angle, resample=Image.Resampling.BICUBIC)
+        )
     off = (window - size) // 2
     fragment = patch[off : off + size, off : off + size]
     mirrored = bool(flip and rng.rand() < 0.5)
@@ -372,7 +374,7 @@ def casia2(
     if copy_move:
         return _casia2_copy_moves(tp_dir, gt_dir, au_dir, rng, n, negatives)
     candidates = sorted(p for p in tp_dir.iterdir() if p.name.startswith("Tp_D_"))
-    rng.shuffle(candidates)
+    rng.shuffle(candidates)  # type: ignore[arg-type]  # stubs want arrays; lists work
 
     samples: List[SpliceSample] = []
     for tp_path in candidates:
@@ -580,10 +582,10 @@ def _pasted_mask(
     )
     labels, n = ndimage.label(changed)
     if n == 0:
-        return changed
+        return np.asarray(changed)
     sizes = np.bincount(labels.ravel())
     keep = np.nonzero(sizes >= min_fraction * changed.size)[0]
-    return ndimage.binary_fill_holes(np.isin(labels, keep[keep > 0]))
+    return np.asarray(ndimage.binary_fill_holes(np.isin(labels, keep[keep > 0])))
 
 
 def coverage(
@@ -736,7 +738,7 @@ def comofod(
     return samples
 
 
-SOURCES = {
+SOURCES: Dict[str, Callable[..., List[SpliceSample]]] = {
     "synthetic": synthetic,
     "photos": photos,
     "casia2": casia2,

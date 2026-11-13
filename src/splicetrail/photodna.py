@@ -30,7 +30,7 @@ from urllib.parse import urlsplit
 try:
     import requests
 except ImportError:  # only needed once a client is made; see PhotoDnaClient
-    requests = None
+    requests = None  # type: ignore[assignment]  # optional extra, checked at use
 
 __all__ = ["PhotoDnaClient", "PhotoDnaError"]
 

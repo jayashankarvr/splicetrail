@@ -32,7 +32,7 @@ def _as_uint8(image: np.ndarray) -> np.ndarray:
     if image.dtype == np.uint8:
         return image
     img = image.astype(np.float32)
-    if img.max() <= 1.0:
+    if np.max(img) <= 1.0:
         img = img * 255.0
     return np.clip(img, 0, 255).astype(np.uint8)
 
@@ -52,16 +52,16 @@ def native_scale_fraction(
     h, w = arr.shape[:2]
     fractions = np.linspace(1.0, min_fraction, steps)
 
-    errs = []
+    err_list = []
     for f in fractions:
         sw, sh = max(8, int(round(w * f))), max(8, int(round(h * f)))
-        small = Image.fromarray(arr).resize((sw, sh), Image.LANCZOS)
-        back = np.asarray(small.resize((w, h), Image.BICUBIC))
-        errs.append(
+        small = Image.fromarray(arr).resize((sw, sh), Image.Resampling.LANCZOS)
+        back = np.asarray(small.resize((w, h), Image.Resampling.BICUBIC))
+        err_list.append(
             float(np.mean((arr.astype(np.float32) - back.astype(np.float32)) ** 2))
         )
 
-    errs = np.array(errs)
+    errs = np.array(err_list)
     floor = errs[fractions >= 0.95].mean() if (fractions >= 0.95).any() else errs[0]
     # Tolerance above the lossless floor. The +1.0 is in uint8 MSE units (inputs are
     # coerced to uint8 by _as_uint8), absorbing tiny resample noise near native scale.

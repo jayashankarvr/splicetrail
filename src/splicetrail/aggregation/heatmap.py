@@ -144,7 +144,7 @@ class MatchList(Sequence):
             return NotImplemented
         return len(self) == len(other) and all(a == b for a, b in zip(self, other))
 
-    __hash__ = None
+    __hash__ = None  # type: ignore[assignment]  # mutable and compared by value
 
     def __repr__(self) -> str:
         return f"MatchList({len(self)} matches)"
@@ -220,7 +220,8 @@ class SpatialAggregator:
         if self.smoothing_sigma > 0:
             heatmap = gaussian_filter(heatmap, sigma=self.smoothing_sigma)
 
-        if heatmap.max() > 0:
-            heatmap /= heatmap.max()
+        peak = np.max(heatmap)
+        if peak > 0:
+            heatmap /= peak
 
         return heatmap

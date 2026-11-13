@@ -13,7 +13,7 @@ history, which version is larger or less compressed), so we don't guess.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, Iterable, List, Optional, Tuple
+from typing import Dict, Iterable, List, Optional, Tuple, cast
 
 import numpy as np
 
@@ -33,7 +33,8 @@ class Link:
 
     @property
     def log10_nfa(self) -> float:
-        return min(r.log10_nfa for r in self.regions)
+        # Regions reach a Link through fdr_select, which keeps only scored ones.
+        return min(cast(float, r.log10_nfa) for r in self.regions)
 
 
 def build_provenance(
@@ -81,7 +82,7 @@ def build_provenance(
         b = (
             region.image_id if region.image_id in images else a
         )  # match_self names its target "self"
-        key = tuple(sorted((a, b)))
+        key = (a, b) if a <= b else (b, a)
         link = links.get(key)
         # Both directions of a pair usually find the same region; keep one per pair direction.
         if link is None:
@@ -119,7 +120,7 @@ def to_dict(links: Iterable[Link]) -> List[dict]:
                         "bbox_in_a": list(map(int, r.source_bbox)),
                         "bbox_in_b": list(map(int, r.target_bbox)),
                         "num_matches": len(r.matches),
-                        "log10_nfa": round(float(r.log10_nfa), 4),
+                        "log10_nfa": round(float(cast(float, r.log10_nfa)), 4),
                         "mirrored": bool(r.mirrored),
                     }
                     for r in link.regions

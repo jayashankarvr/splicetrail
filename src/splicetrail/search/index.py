@@ -14,13 +14,14 @@ against real pixels, so a lossy index can miss matches but not invent them.
 
 from __future__ import annotations
 
+import importlib
 import json
 import os
 import tempfile
 import threading
 from collections import OrderedDict
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import Any, List, Tuple
 
 import numpy as np
 
@@ -31,8 +32,11 @@ from splicetrail.exceptions import (
     TargetExistsError,
 )
 
+# faiss >= 1.16 ships a py.typed stub that misses its SWIG wrappers (DirectMap,
+# array-taking remove_ids, index subclasses), so it is typed as Any here.
+faiss: Any
 try:
-    import faiss
+    faiss = importlib.import_module("faiss")
 except ImportError:  # pragma: no cover - faiss is a hard dependency
     faiss = None
 
@@ -183,14 +187,14 @@ class ANNIndex:
         if not owners:
             missing = np.full(ids.shape, -1, dtype=np.int64)
             return missing, missing.copy()
-        owners = np.array(owners, dtype=np.int64)
+        owner_ids = np.array(owners, dtype=np.int64)
         starts = np.array(
-            [self._ranges[image_ids[i]][0] for i in owners], dtype=np.int64
+            [self._ranges[image_ids[i]][0] for i in owner_ids], dtype=np.int64
         )
         pos = np.searchsorted(starts, ids, side="right") - 1
         valid = (ids >= 0) & (pos >= 0)
         pos = np.clip(pos, 0, None)
-        owner = np.where(valid, owners[pos], -1)
+        owner = np.where(valid, owner_ids[pos], -1)
         patch_idx = np.where(valid, ids - starts[pos], -1)
         return owner, patch_idx
 

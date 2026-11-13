@@ -134,10 +134,11 @@ def cluster_offsets(
     matches, and this skips building their member lists.
     """
     offsets = np.asarray(offsets, dtype=np.int64).reshape(-1, 2)
-    groups = np.asarray(groups)
     if len(offsets) < min_size:
         return []
-    _, first, group_idx = np.unique(groups, return_index=True, return_inverse=True)
+    _, first, group_idx = np.unique(
+        np.asarray(groups), return_index=True, return_inverse=True
+    )
     d = np.arange(-tol, tol + 1)
     found = []  # (size, score sum, peak, cell list, per-group cell -> rows lookup)
     for g in np.argsort(first):
@@ -236,7 +237,7 @@ def find_rigid_regions(
     """
     rng = np.random.RandomState(0)
     tol = max(offset_tolerance, 1)
-    regions = []
+    regions: List[CoherentRegion] = []
     by_image: Dict[str, List] = defaultdict(list)
     for m in matches:
         by_image[m.image_id].append(m)
@@ -265,7 +266,7 @@ def find_rigid_regions(
             cand = ext_idx[lo:hi]
             cand = cand[alive[cand]]
             pred = _rotate(src[cand], theta) + shift
-            return cand[np.abs(pred - tgt[cand]).max(axis=1) <= slack]
+            return np.asarray(cand[np.abs(pred - tgt[cand]).max(axis=1) <= slack])
 
         while alive.sum() >= min_cluster_size and len(regions) < max_regions:
             remaining = np.nonzero(alive)[0]

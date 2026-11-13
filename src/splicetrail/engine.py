@@ -27,7 +27,7 @@ import threading
 from collections import OrderedDict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Dict, List, Optional, Sequence, Tuple, cast
 
 import numpy as np
 from PIL import Image
@@ -618,6 +618,8 @@ class ForensicsEngine:
         (a match's measured turn) when given. It indexes full resolution only.
         """
         size = self.config.patch_size
+        # Callers load the target's pixels first (levels may have been dropped).
+        assert target.levels is not None and target.level_coords is not None
         if self.config.rotation_invariant:
             if target.ring_planes is None:
                 level = target.levels[1.0]
@@ -629,6 +631,7 @@ class ForensicsEngine:
                 target.ring_planes, target.level_coords[idx], size, phase=angles
             )
         out = np.empty((len(idx), size, size, 3), dtype=np.float32)
+        assert target.scales is not None
         scales = target.scales[idx]
         for scale in np.unique(scales):
             sel = np.nonzero(scales == scale)[0]
@@ -719,11 +722,12 @@ class ForensicsEngine:
         regions = []
         for result in results:
             for region in result.coherent_regions:
+                assert region.log10_nfa is not None  # every returned region is scored
                 region.log10_nfa += float(np.log10(factor))
                 region.n_tests = (region.n_tests or 0.0) * factor
             regions.extend(result.coherent_regions)
         regions = _drop_duplicate_regions(regions)
-        matches = MatchList.concat([r.matches for r in results])
+        matches = MatchList.concat([cast(MatchList, r.matches) for r in results])
         best_match = (
             max(regions[0].matches, key=lambda m: m.probability)
             if regions
@@ -792,7 +796,7 @@ class ForensicsEngine:
                 source_image, target_ids, return_heatmap, jpeg_sigma
             )
         if len(passes) == 1:
-            result, *_ = passes[0]
+            result: MatchResult = passes[0][0]
             if return_heatmap:
                 result.heatmap = self._heatmap(
                     result.matches, result.coherent_regions, result.best_match
@@ -1195,7 +1199,7 @@ class ForensicsEngine:
             # data too: count about one hypothesis per power-of-two width and
             # height.
             n_tests *= np.ceil(np.log2(max(sw, 2))) * np.ceil(np.log2(max(sh, 2)))
-        return n_tests
+        return float(n_tests)
 
     def _significant_regions(
         self,
@@ -1375,7 +1379,7 @@ class ForensicsEngine:
         _, support = np.unique(
             pairs // (int(candidates.src_idx.max()) + 1), return_counts=True
         )
-        return min(1.0, support.max() / len(box))
+        return min(1.0, float(np.max(support)) / len(box))
 
     def _fit_region_transform(
         self, src: np.ndarray, tgt: np.ndarray, usable: np.ndarray
@@ -1578,13 +1582,13 @@ def _resize(image: np.ndarray, scale: float) -> np.ndarray:
     h, w = image.shape[:2]
     size = (max(1, int(round(w * scale))), max(1, int(round(h * scale))))
     resized = Image.fromarray(_to_uint8(image)).resize(
-        size, Image.BOX if scale < 1 else Image.BICUBIC
+        size, Image.Resampling.BOX if scale < 1 else Image.Resampling.BICUBIC
     )
     return np.asarray(resized).astype(np.float32) / 255.0
 
 
 def _to_uint8(image: np.ndarray) -> np.ndarray:
-    return np.clip(np.round(image * 255.0), 0, 255).astype(np.uint8)
+    return np.asarray(np.clip(np.round(image * 255.0), 0, 255).astype(np.uint8))
 
 
 def _drop_duplicate_regions(
@@ -1656,7 +1660,7 @@ def _turns_onto_itself(region, min_turn: float = np.radians(10)) -> bool:
         x, y, w, h = box
         return x <= pivot[0] <= x + w and y <= pivot[1] <= y + h
 
-    return inside(region.source_bbox) and inside(region.target_bbox)
+    return bool(inside(region.source_bbox) and inside(region.target_bbox))
 
 
 def _halves_touch(region, max_gap: int, max_shift: int = 2) -> bool:
@@ -1670,7 +1674,7 @@ def _halves_touch(region, max_gap: int, max_shift: int = 2) -> bool:
     sx, sy, sw, sh = region.source_bbox
     tx, ty, tw, th = region.target_bbox
     gap = max(tx - (sx + sw), sx - (tx + tw))
-    return (
+    return bool(
         gap <= max_gap and abs(ty - sy) <= max_shift and abs(th - sh) <= 2 * max_shift
     )
 
@@ -1682,7 +1686,7 @@ def _wrap_angle(angle):
 def _unclipped(patches: np.ndarray) -> np.ndarray:
     """(N, P) bool: pixels with no channel at 0 or 1 (one 8-bit level of slack either way)."""
     flat = patches.reshape(len(patches), -1, 3)
-    return ((flat > 1.0 / 255) & (flat < 254.0 / 255)).all(axis=2)
+    return np.asarray(((flat > 1.0 / 255) & (flat < 254.0 / 255)).all(axis=2))
 
 
 def _usable_pixels(source: np.ndarray, target: np.ndarray) -> np.ndarray:
@@ -1692,7 +1696,7 @@ def _usable_pixels(source: np.ndarray, target: np.ndarray) -> np.ndarray:
     clipped source channel corrupts every predicted target channel, so the
     whole pixel pair goes.
     """
-    return _unclipped(source) & _unclipped(target)
+    return np.asarray(_unclipped(source) & _unclipped(target))
 
 
 def load_image(path: str) -> np.ndarray:

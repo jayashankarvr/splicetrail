@@ -14,7 +14,7 @@ from __future__ import annotations
 import argparse
 import json
 import time
-from typing import Dict, List, Sequence
+from typing import Dict, List, Optional, Sequence
 
 from splicetrail.bench import calibration
 from splicetrail.bench.baselines import Detector, RootSiftRansacDetector
@@ -83,7 +83,7 @@ def run(
     color_grade_strength: float = 0.15,
     jpeg_quality=None,
     negatives: int = 0,
-    detectors: Sequence[Detector] = None,
+    detectors: Optional[Sequence[Detector]] = None,
 ) -> Dict[str, Dict]:
     """Synthetic benchmark across detectors (SpliceTrail + RootSIFT by default)."""
     from splicetrail.bench.baselines import SpliceTrailDetector

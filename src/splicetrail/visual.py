@@ -26,7 +26,7 @@ def _png_data_uri(image: np.ndarray) -> str:
     if scale < 1.0:
         img = img.resize(
             (max(1, int(img.width * scale)), max(1, int(img.height * scale))),
-            Image.LANCZOS,
+            Image.Resampling.LANCZOS,
         )
     buf = io.BytesIO()
     img.save(buf, format="PNG")

@@ -147,4 +147,4 @@ class PatchExtractor:
         prob = hist / gray.shape[1]
         with np.errstate(divide="ignore", invalid="ignore"):
             terms = np.where(prob > 0, prob * np.log2(prob), 0.0)
-        return (-terms.sum(axis=1)).astype(np.float32)
+        return np.asarray((-terms.sum(axis=1)).astype(np.float32))

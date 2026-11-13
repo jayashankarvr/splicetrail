@@ -44,4 +44,7 @@ def quantization_sigma_for_quality(quality: int) -> float:
     buf = io.BytesIO()
     Image.new("RGB", (8, 8)).save(buf, format="JPEG", quality=int(quality))
     buf.seek(0)
-    return sigma_from_tables(Image.open(buf).quantization)
+    sigma = sigma_from_tables(getattr(Image.open(buf), "quantization", None))
+    if sigma is None:  # PIL always writes tables; this only narrows the type
+        raise RuntimeError("PIL wrote a JPEG without quantization tables")
+    return sigma

@@ -3,7 +3,7 @@
 import os
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Any, Dict, List, Optional
 import numpy as np
 from PIL import Image
 
@@ -12,7 +12,7 @@ try:
 
     CLICK_AVAILABLE = True
 except ImportError:
-    click = None
+    click = None  # type: ignore[assignment]  # checked via CLICK_AVAILABLE
     CLICK_AVAILABLE = False
 
 from splicetrail import __version__
@@ -63,7 +63,7 @@ def build_config(
     thorough: bool = False,
 ) -> Config:
     """Config from CLI flags; anything left as None keeps its Config/SPLICETRAIL_* default."""
-    overrides = {"thorough": True} if thorough else {}
+    overrides: Dict[str, Any] = {"thorough": True} if thorough else {}
     if entropy is not None:
         overrides["entropy_threshold"] = entropy if entropy > 0 else None
     if threshold is not None:
@@ -250,7 +250,7 @@ def index(
     dir_path = Path(directory)
     patterns = [p.strip() for p in pattern.split(",")]
 
-    image_files = []
+    image_files: List[Path] = []
     for p in patterns:
         image_files.extend(dir_path.glob(p))
         image_files.extend(dir_path.glob(p.upper()))
@@ -717,7 +717,7 @@ def serve(
             "FastAPI required for API server: pip install splicetrail[api]"
         )
 
-    overrides = {"thorough": True} if thorough else {}
+    overrides: Dict[str, Any] = {"thorough": True} if thorough else {}
     if pyramid is not None:
         overrides["pyramid_enabled"] = pyramid
     if patch_size is not None:

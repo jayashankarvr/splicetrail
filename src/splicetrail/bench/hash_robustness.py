@@ -34,13 +34,13 @@ from splicetrail.hashing import DEFAULT_DISTANCE, hamming, hash_image
 def _resize(img: np.ndarray, factor: float) -> np.ndarray:
     h, w = img.shape[:2]
     size = (max(1, round(w * factor)), max(1, round(h * factor)))
-    return np.asarray(Image.fromarray(img).resize(size, Image.BICUBIC))
+    return np.asarray(Image.fromarray(img).resize(size, Image.Resampling.BICUBIC))
 
 
 def _grade(img: np.ndarray, strength: float = 0.15, seed: int = 0) -> np.ndarray:
     M, b = _random_color_transform(np.random.RandomState(seed), strength)
     out = _apply_color_transform(img.astype(np.float64) / 255.0, M, b)
-    return np.round(out * 255.0).astype(np.uint8)
+    return np.asarray(np.round(out * 255.0).astype(np.uint8))
 
 
 def _crop(img: np.ndarray, fraction: float = 0.05) -> np.ndarray:

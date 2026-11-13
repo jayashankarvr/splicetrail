@@ -36,8 +36,8 @@ def largest_connected_component(mask: np.ndarray) -> np.ndarray:
     # Bincount over labels (skip background label 0) and keep the biggest.
     counts = np.bincount(labeled.ravel())
     counts[0] = 0
-    keep = int(counts.argmax())
-    return labeled == keep
+    keep = int(np.argmax(counts))
+    return np.asarray(labeled == keep)
 
 
 def localize(

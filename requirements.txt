@@ -1,7 +1,7 @@
 # Core dependencies
 numpy>=1.20.0
 scipy>=1.7.0
-pillow>=8.0.0
+pillow>=9.1.0
 scikit-learn>=0.24.0
 
 # Search

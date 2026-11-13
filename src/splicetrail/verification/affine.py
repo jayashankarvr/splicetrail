@@ -208,4 +208,4 @@ def fit_gain_offset_batch(
     tc = target - tgt_mean[:, None]
     gain = (w * sc * tc).sum(axis=1) / np.maximum((w * sc * sc).sum(axis=1), 1e-12)
     residual = tc - gain[:, None] * sc
-    return (w * residual * residual).sum(axis=1)
+    return np.asarray((w * residual * residual).sum(axis=1))

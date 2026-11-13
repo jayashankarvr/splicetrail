@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Dict, List, Sequence
+from typing import Dict, List, Optional, Sequence, cast
 
 import numpy as np
 
@@ -38,8 +38,8 @@ class RegionRecord:
 class SampleRecord:
     label: int
     regions: List[RegionRecord] = field(default_factory=list)
-    mask: np.ndarray = None  # predicted localization at the engine's max_nfa
-    gt_mask: np.ndarray = None
+    mask: Optional[np.ndarray] = None  # predicted localization at the engine's max_nfa
+    gt_mask: Optional[np.ndarray] = None
     seconds: float = 0.0
     marks_copy_only: bool = False  # gt_mask marks the pasted copy but not its source
 
@@ -91,14 +91,19 @@ def score_samples(
                     (h & sample.mask).sum() / max(h.sum(), 1) >= HIT_OVERLAP
                     for h in halves
                 )
-                regions.append(RegionRecord(float(region.log10_nfa), bool(hit)))
+                regions.append(
+                    RegionRecord(float(cast(float, region.log10_nfa)), bool(hit))
+                )
                 continue
             if sample.donor is None:
                 footprint |= _target_footprint(region, shape)
             inside = (footprint & sample.mask).sum() / max(footprint.sum(), 1)
             regions.append(
-                RegionRecord(float(region.log10_nfa), bool(inside >= HIT_OVERLAP))
+                RegionRecord(
+                    float(cast(float, region.log10_nfa)), bool(inside >= HIT_OVERLAP)
+                )
             )
+        assert result.localization is not None  # match/match_self always set it
         records.append(
             SampleRecord(
                 label=sample.label,
@@ -190,7 +195,13 @@ def summary(records: Sequence[SampleRecord]) -> Dict[str, float]:
     so only recall (how much of the copy is covered) is reported for those.
     """
     positives = [r for r in records if r.label == 1]
-    out = aggregate([localization_scores(r.mask, r.gt_mask) for r in positives])
+    # Records from run() always carry both masks; table-only records may not.
+    out = aggregate(
+        [
+            localization_scores(cast(np.ndarray, r.mask), cast(np.ndarray, r.gt_mask))
+            for r in positives
+        ]
+    )
     if positives and all(r.marks_copy_only for r in positives):
         out.update(
             iou=float("nan"), f1=float("nan"), precision=float("nan"), mcc=float("nan")

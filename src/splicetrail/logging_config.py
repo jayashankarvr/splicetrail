@@ -2,7 +2,7 @@
 
 import logging
 import sys
-from typing import Optional
+from typing import Optional, TextIO
 
 # Package-level logger
 logger = logging.getLogger("splicetrail")
@@ -11,7 +11,7 @@ logger = logging.getLogger("splicetrail")
 def setup_logging(
     level: str = "INFO",
     format_string: Optional[str] = None,
-    stream: Optional[object] = None,
+    stream: Optional[TextIO] = None,
 ) -> None:
     """
     Configure logging for SpliceTrail.

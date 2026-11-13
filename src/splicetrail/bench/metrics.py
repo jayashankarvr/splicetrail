@@ -50,13 +50,13 @@ def detection_auc(scores: Sequence[float], labels: Sequence[int]) -> float:
 
     Returns 0.5 if only one class is present (AUC undefined).
     """
-    labels = np.asarray(labels, dtype=int)
-    scores = np.asarray(scores, dtype=float)
-    if len(np.unique(labels)) < 2:
+    label_arr = np.asarray(labels, dtype=int)
+    score_arr = np.asarray(scores, dtype=float)
+    if len(np.unique(label_arr)) < 2:
         return 0.5
     from sklearn.metrics import roc_auc_score
 
-    return float(roc_auc_score(labels, scores))
+    return float(roc_auc_score(label_arr, score_arr))
 
 
 def aggregate(per_sample: List[Dict[str, float]]) -> Dict[str, float]:

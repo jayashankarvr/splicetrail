@@ -11,9 +11,12 @@ baselines directly comparable.
 
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from typing import TYPE_CHECKING, Optional, Tuple, cast
 
 import numpy as np
+
+if TYPE_CHECKING:
+    from splicetrail.engine import Config
 
 
 class Detector:
@@ -34,7 +37,7 @@ class SpliceTrailDetector(Detector):
 
     name = "splicetrail"
 
-    def __init__(self, config: Optional[object] = None):
+    def __init__(self, config: Optional["Config"] = None):
         from splicetrail.engine import Config
 
         self.config = config or Config()
@@ -51,9 +54,13 @@ class SpliceTrailDetector(Detector):
 
         result = engine.match(tampered, return_heatmap=False)
         # No region at all ranks below any region; roc_auc_score rejects inf.
+        # match() always scores its regions and fills in localization.
         score = (
-            -result.coherent_regions[0].log10_nfa if result.coherent_regions else -1e9
+            -cast(float, result.coherent_regions[0].log10_nfa)
+            if result.coherent_regions
+            else -1e9
         )
+        assert result.localization is not None
         return result.localization.mask, float(score)
 
 
@@ -75,7 +82,7 @@ class RootSiftRansacDetector(Detector):
     def _root_sift(descriptors: np.ndarray) -> np.ndarray:
         # L1-normalize then square-root (RootSIFT): Hellinger kernel in L2 space.
         descriptors = descriptors / (descriptors.sum(axis=1, keepdims=True) + 1e-7)
-        return np.sqrt(descriptors)
+        return np.asarray(np.sqrt(descriptors))
 
     def detect(
         self, donor: np.ndarray, tampered: np.ndarray
@@ -88,14 +95,14 @@ class RootSiftRansacDetector(Detector):
         gray_d = cv2.cvtColor(donor, cv2.COLOR_RGB2GRAY)
         gray_t = cv2.cvtColor(tampered, cv2.COLOR_RGB2GRAY)
 
-        sift = cv2.SIFT_create()
+        sift = cv2.SIFT.create()
         kp_d, des_d = sift.detectAndCompute(gray_d, None)
         kp_t, des_t = sift.detectAndCompute(gray_t, None)
         if des_d is None or des_t is None or len(kp_d) < 2 or len(kp_t) < 2:
             return empty, 0.0
 
-        des_d = self._root_sift(des_d.astype(np.float32))
-        des_t = self._root_sift(des_t.astype(np.float32))
+        des_d = self._root_sift(np.asarray(des_d, dtype=np.float32))
+        des_t = self._root_sift(np.asarray(des_t, dtype=np.float32))
 
         bf = cv2.BFMatcher(cv2.NORM_L2)
         knn = bf.knnMatch(des_t, des_d, k=2)  # query = tampered, train = donor
@@ -109,8 +116,8 @@ class RootSiftRansacDetector(Detector):
         if len(good) < self.min_inliers:
             return empty, float(len(good))
 
-        pts_t = np.float32([kp_t[m.queryIdx].pt for m in good])
-        pts_d = np.float32([kp_d[m.trainIdx].pt for m in good])
+        pts_t = np.array([kp_t[m.queryIdx].pt for m in good], dtype=np.float32)
+        pts_d = np.array([kp_d[m.trainIdx].pt for m in good], dtype=np.float32)
 
         _, inliers = cv2.estimateAffinePartial2D(
             pts_d, pts_t, method=cv2.RANSAC, ransacReprojThreshold=3.0
@@ -118,7 +125,7 @@ class RootSiftRansacDetector(Detector):
         if inliers is None:
             return empty, float(len(good))
 
-        inlier_pts = pts_t[inliers.ravel().astype(bool)]
+        inlier_pts = pts_t[np.asarray(inliers).ravel().astype(bool)]
         n_inliers = len(inlier_pts)
         if n_inliers < self.min_inliers:
             return empty, float(n_inliers)

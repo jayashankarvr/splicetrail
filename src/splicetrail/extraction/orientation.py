@@ -19,7 +19,7 @@ orientation, is described in the changelog along with how the two compare.
 
 from __future__ import annotations
 
-from typing import Optional, Tuple
+from typing import List, Optional, Tuple, Union
 
 import numpy as np
 from scipy.ndimage import map_coordinates
@@ -40,7 +40,7 @@ def ring_footprint(patch_size: int) -> int:
 
 
 def ring_samples(
-    image: np.ndarray,
+    image: Union[np.ndarray, Tuple[np.ndarray, ...], List[np.ndarray]],
     coords: np.ndarray,
     patch_size: int,
     phase: Optional[np.ndarray] = None,
@@ -65,9 +65,11 @@ def ring_samples(
     ys = cy[:, None, None] + radii[None, :, None] * np.sin(a)[:, None, :]
     shape = (len(coords), len(radii), RING_ANGLES)
     if not isinstance(image, (list, tuple)) and image.ndim == 2:
-        return map_coordinates(
-            image, [ys.ravel(), xs.ravel()], order=1, mode="nearest"
-        ).reshape(shape)
+        return np.asarray(
+            map_coordinates(
+                image, [ys.ravel(), xs.ravel()], order=1, mode="nearest"
+            ).reshape(shape)
+        )
     planes = (
         image
         if isinstance(image, (list, tuple))
@@ -138,4 +140,4 @@ def relative_angles(source: np.ndarray, target: np.ndarray) -> np.ndarray:
         0.5 * (left - right) / np.where(curve == 0, 1, curve),
         0.0,
     )
-    return (k + step) * 2 * np.pi / RING_ANGLES
+    return np.asarray((k + step) * 2 * np.pi / RING_ANGLES)

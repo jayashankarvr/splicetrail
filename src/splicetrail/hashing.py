@@ -120,7 +120,9 @@ def _to_uint8(image: np.ndarray) -> np.ndarray:
     if low < 0 or top > 255:
         raise ValueError("float pixels must be within 0..1 or 0..255")
     scale = np.float32(255.0 if top <= 1.0 else 1.0)
-    return np.rint(image.astype(np.float32, copy=False) * scale).astype(np.uint8)
+    return np.asarray(
+        np.rint(image.astype(np.float32, copy=False) * scale).astype(np.uint8)
+    )
 
 
 def _bits_to_hex(bits: np.ndarray) -> str:
@@ -340,7 +342,7 @@ class HashList:
     hexes: np.ndarray
     ids: np.ndarray
     # Per-algorithm (row indices, packed byte matrix), built on first use.
-    _matrices: Dict[str, tuple] = field(
+    _matrices: Dict[str, Optional[tuple]] = field(
         default_factory=dict, init=False, repr=False, compare=False
     )
 
@@ -464,8 +466,8 @@ def _distances(packed: np.ndarray, query: np.ndarray) -> np.ndarray:
     if hasattr(np, "bitwise_count"):  # numpy 2+
         if xor.shape[1] % 8 == 0:
             xor = xor.view(np.uint64)
-        return np.bitwise_count(xor).sum(axis=1, dtype=np.int64)
-    return _POPCOUNT[xor].sum(axis=1, dtype=np.int64)
+        return np.asarray(np.bitwise_count(xor).sum(axis=1, dtype=np.int64))
+    return np.asarray(_POPCOUNT[xor].sum(axis=1, dtype=np.int64))
 
 
 def match_hashes(

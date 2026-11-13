@@ -27,7 +27,7 @@ class SpliceSample:
     transform are filled in when we generated the splice ourselves.
     """
 
-    donor: np.ndarray  # reference image (uint8 HxWx3), source of the fragment
+    donor: Optional[np.ndarray]  # reference image (uint8 HxWx3), source of the fragment
     tampered: np.ndarray  # host image with the recolored fragment spliced in
     mask: (
         np.ndarray
@@ -74,8 +74,8 @@ def _textured_image(rng: np.random.RandomState, h: int, w: int) -> np.ndarray:
     # Per-channel contrast stretch to [0, 1].
     for c in range(3):
         ch = img[:, :, c]
-        lo, hi = ch.min(), ch.max()
-        img[:, :, c] = (ch - lo) / max(hi - lo, 1e-6)
+        lo, hi = np.min(ch), np.max(ch)
+        img[:, :, c] = (ch - lo) / np.maximum(hi - lo, 1e-6)
     return (img * 255).astype(np.uint8)
 
 
@@ -97,7 +97,7 @@ def _apply_color_transform(
     """Apply target = M @ source + b in [0,1] space, clipped."""
     flat = region01.reshape(-1, 3)
     out = flat @ M.T + b
-    return np.clip(out, 0.0, 1.0).reshape(region01.shape)
+    return np.asarray(np.clip(out, 0.0, 1.0).reshape(region01.shape))
 
 
 def _random_tone_curve(rng: np.random.RandomState, strength: float) -> np.ndarray:
@@ -105,11 +105,11 @@ def _random_tone_curve(rng: np.random.RandomState, strength: float) -> np.ndarra
 
     Stands in for Curves / gamma edits. strength 0.4 means gammas in about [0.67, 1.5].
     """
-    return np.exp(strength * rng.uniform(-1.0, 1.0, size=3))
+    return np.asarray(np.exp(strength * rng.uniform(-1.0, 1.0, size=3)))
 
 
 def _apply_tone_curve(region01: np.ndarray, gammas: np.ndarray) -> np.ndarray:
-    return np.clip(region01, 0.0, 1.0) ** gammas
+    return np.asarray(np.clip(region01, 0.0, 1.0) ** gammas)
 
 
 def _jpeg_roundtrip(image_u8: np.ndarray, quality: int) -> np.ndarray:
@@ -169,7 +169,9 @@ def make_recolored_splice(
         small = max(2, int(round(fs / splice_upscale)))
         img = Image.fromarray(recolored_u8)
         recolored_u8 = np.asarray(
-            img.resize((small, small), Image.LANCZOS).resize((fs, fs), Image.BICUBIC)
+            img.resize((small, small), Image.Resampling.LANCZOS).resize(
+                (fs, fs), Image.Resampling.BICUBIC
+            )
         )
 
     # Paste location within the host
