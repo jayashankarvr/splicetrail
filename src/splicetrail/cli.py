@@ -524,7 +524,7 @@ def hash_command(
             )
     if not names and not use_photodna:
         raise click.ClickException(
-            "No hash algorithm is installed here: pip install splicetrail[hash]"
+            'No hash algorithm is installed here: pip install "splicetrail[hash]"'
         )
 
     # A list without an algorithm column holds hashes of the one algorithm named.
@@ -718,7 +718,7 @@ def serve(
         from splicetrail.api import run_server
     except ImportError:
         raise click.ClickException(
-            "FastAPI required for API server: pip install splicetrail[api]"
+            'FastAPI required for API server: pip install "splicetrail[api]"'
         )
 
     overrides: Dict[str, Any] = {"thorough": True} if thorough else {}

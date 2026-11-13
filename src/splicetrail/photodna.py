@@ -80,7 +80,7 @@ class PhotoDnaClient:
     ):
         if requests is None:
             raise PhotoDnaError(
-                "PhotoDNA needs the requests package: pip install splicetrail[hash]"
+                'PhotoDNA needs the requests package: pip install "splicetrail[hash]"'
             )
         key = key or os.environ.get("SPLICETRAIL_PHOTODNA_KEY")
         if not key:

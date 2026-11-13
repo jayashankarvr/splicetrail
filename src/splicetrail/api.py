@@ -408,7 +408,7 @@ def create_app(
         FastAPI application instance
     """
     if not FASTAPI_AVAILABLE:
-        raise DependencyError("FastAPI required: pip install splicetrail[api]")
+        raise DependencyError('FastAPI required: pip install "splicetrail[api]"')
 
     api_key = os.environ.get("SPLICETRAIL_API_KEY") or None
     max_pixels = _env_int("SPLICETRAIL_MAX_IMAGE_PIXELS", MAX_IMAGE_PIXELS, min_val=1)
@@ -824,7 +824,7 @@ def create_app(
                 raise HTTPException(
                     status_code=501,
                     detail="No hash algorithm is installed on the server: "
-                    "pip install splicetrail[hash]",
+                    'pip install "splicetrail[hash]"',
                 )
 
         client = None
@@ -852,7 +852,7 @@ def create_app(
                 raise HTTPException(
                     status_code=501,
                     detail="photodna is unavailable on this server: it needs the "
-                    "requests package (pip install splicetrail[hash]) and a valid "
+                    'requests package (pip install "splicetrail[hash]") and a valid '
                     "SPLICETRAIL_PHOTODNA_ENDPOINT; the server log has the details",
                 )
 
@@ -934,14 +934,14 @@ def _missing_hash_dependency(names: List[str]) -> str:
     """Fixed 501 text saying what to install for the requested algorithms."""
     hints = []
     if any(n in ("pdq", "phash") for n in names):
-        hints.append("pdq and phash need pip install splicetrail[hash]")
+        hints.append('pdq and phash need pip install "splicetrail[hash]"')
     if "phash-lib" in names:
         hints.append(
             "phash-lib needs libpHash (e.g. apt install libphash0, "
             "or set SPLICETRAIL_PHASH_LIB)"
         )
     return "A requested hash algorithm isn't installed on the server: " + "; ".join(
-        hints or ["pip install splicetrail[hash]"]
+        hints or ['pip install "splicetrail[hash]"']
     )
 
 
@@ -983,7 +983,7 @@ def run_server(
     try:
         import uvicorn
     except ImportError:
-        raise DependencyError("uvicorn required: pip install splicetrail[api]")
+        raise DependencyError('uvicorn required: pip install "splicetrail[api]"')
 
     # The package logger only has a NullHandler; a server should show its
     # warnings and logged 500s, unless the host program configured logging.

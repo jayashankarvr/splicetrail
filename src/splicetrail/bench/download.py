@@ -53,7 +53,9 @@ def _kaggle_api():
     try:
         from kaggle.api.kaggle_api_extended import KaggleApi
     except ImportError:
-        raise SystemExit("the kaggle package is needed: pip install splicetrail[bench]")
+        raise SystemExit(
+            'the kaggle package is needed: pip install "splicetrail[bench]"'
+        )
     api = KaggleApi()
     api.authenticate()
     return api

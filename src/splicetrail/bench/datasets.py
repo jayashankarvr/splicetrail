@@ -87,7 +87,7 @@ def load_photos() -> Dict[str, np.ndarray]:
         import skimage.data as skdata
     except ImportError as e:  # pragma: no cover - depends on the bench extra
         raise ImportError(
-            "the photos dataset needs scikit-image: pip install splicetrail[bench]"
+            'the photos dataset needs scikit-image: pip install "splicetrail[bench]"'
         ) from e
 
     photos = {}

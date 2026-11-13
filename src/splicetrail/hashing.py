@@ -2,7 +2,7 @@
 
 Every hash comes from the reference library (pdqhash, imagehash); nothing here
 re-implements an algorithm. The libraries are optional, installed with
-``pip install splicetrail[hash]``. libpHash is GPLv3, so it is never bundled;
+``pip install "splicetrail[hash]"``. libpHash is GPLv3, so it is never bundled;
 it is used only if the user installed it themselves.
 """
 
@@ -41,7 +41,7 @@ DEFAULT_DISTANCE: Dict[str, int] = {"pdq": 31, "phash": 10, "phash-lib": 10}
 # this size before hashing, with CImg's default (nearest neighbour) resize.
 _PDQ_DOWNSAMPLE = 512
 
-_INSTALL_HINT = "pip install splicetrail[hash]"
+_INSTALL_HINT = 'pip install "splicetrail[hash]"'
 
 # Every algorithm hashed in this process, whether or not its package is installed.
 LOCAL_ALGORITHMS = ("pdq", "phash", "phash-lib")

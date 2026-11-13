@@ -407,7 +407,7 @@ def test_hash_errors_are_fixed_messages(caplog):
     ):
         r = client.post("/hash", params={"algorithm": "pdq"}, files=image)
     assert r.status_code == 501 and "secret" not in r.text
-    assert "pip install splicetrail[hash]" in r.json()["detail"]
+    assert 'pip install "splicetrail[hash]"' in r.json()["detail"]
 
     with mock.patch.object(
         hashing._ALGORITHMS["pdq"], "compute", side_effect=RuntimeError("secret boom")
@@ -437,7 +437,7 @@ def test_photodna_errors_are_fixed_messages(monkeypatch, caplog):
     ):
         r = client.post("/hash", **call)
     assert r.status_code == 501 and "secret" not in r.text
-    assert "pip install splicetrail[hash]" in r.json()["detail"]
+    assert 'pip install "splicetrail[hash]"' in r.json()["detail"]
 
     with mock.patch("splicetrail.photodna.PhotoDnaClient") as client_cls:
         client_cls.return_value.match.side_effect = photodna.PhotoDnaError(

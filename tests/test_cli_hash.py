@@ -174,7 +174,7 @@ def test_named_algorithm_not_installed(monkeypatch):
     monkeypatch.setitem(sys.modules, "pdqhash", None)
     result = run(ORIGINAL, "--algorithm", "pdq")
     assert result.exit_code != 0
-    assert "pip install splicetrail[hash]" in result.output
+    assert 'pip install "splicetrail[hash]"' in result.output
     assert "Unknown algorithm" not in result.output
 
 
@@ -182,7 +182,7 @@ def test_nothing_installed(monkeypatch):
     _nothing_installed(monkeypatch)
     result = run(ORIGINAL)
     assert result.exit_code != 0
-    assert "pip install splicetrail[hash]" in result.output
+    assert 'pip install "splicetrail[hash]"' in result.output
 
 
 def test_not_compared_when_quality_too_low(tmp_path):

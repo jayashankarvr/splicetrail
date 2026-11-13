@@ -153,7 +153,7 @@ def test_hash_endpoint_missing_package():
     with mock.patch.dict(sys.modules, {"pdqhash": None}):
         r = client.post("/hash", params={"algorithm": "pdq"}, files={"file": _bridge()})
     assert r.status_code == 501
-    assert "pip install splicetrail[hash]" in r.json()["detail"]
+    assert 'pip install "splicetrail[hash]"' in r.json()["detail"]
 
 
 def test_hash_endpoint_unknown_algorithm():
@@ -235,4 +235,4 @@ def test_hash_endpoint_nothing_installed():
     ):
         r = client.post("/hash", files={"file": _bridge()})
     assert r.status_code == 501
-    assert "pip install splicetrail[hash]" in r.json()["detail"]
+    assert 'pip install "splicetrail[hash]"' in r.json()["detail"]
