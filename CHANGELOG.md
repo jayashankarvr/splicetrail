@@ -57,7 +57,7 @@ expose. On the synthetic benchmark
 - The REST API ran indexing and matching on the event loop, which blocked health checks; they now run in a worker thread. Auto-generated image ids (`img_{count}`) collided after deletions; they're now random.
 - Index files are written with `os.replace` from the same directory (actually atomic). The old version deleted the existing files first, and loading still supported pickle.
 - API docs and README sent `image_id`, `target_ids` and `return_heatmap` as form fields, which the API ignored; they're query parameters.
-- `python -m splicetrail.bench.download` with an expired or revoked Kaggle token retries once without it (public datasets download anonymously) and otherwise exits with a message saying how to refresh the token, instead of a raw HTTP 404.
+- `python -m splicetrail.bench.download` with an expired or revoked Kaggle token retries once without the token and otherwise exits with a message saying how to refresh the token, instead of a raw HTTP 404.
 - The `bench` and `full` extras install `six`, which `kaggle` 2.2.x imports without declaring; without it the kaggle client failed with `No module named 'six'`.
 
 ### Added

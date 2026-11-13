@@ -79,11 +79,12 @@ def _download_with_token(ref: str, target: Path, token: str) -> None:
     )
     if response.status_code in (401, 403, 404):
         # A stale or revoked token gets 401/403/404 even for public datasets,
-        # which Kaggle also serves without authentication: retry once without it.
+        # which may also be served without authentication: retry once without it.
         first = response.status_code
         response.close()
         print(
-            f"Kaggle rejected the token (HTTP {first}); retrying without it",
+            f"Kaggle refused the request with your token (HTTP {first}); "
+            "retrying without it",
             file=sys.stderr,
         )
         response = requests.get(url, stream=True, timeout=60)
@@ -94,7 +95,7 @@ def _download_with_token(ref: str, target: Path, token: str) -> None:
                 f"Kaggle refused {ref}: HTTP {first} with your token, HTTP {second} "
                 "without it. Either the token is expired or revoked, or the dataset "
                 "is gone. Create a new token at kaggle.com -> Settings -> API and put "
-                "it in KAGGLE_API_TOKEN or ~/.kaggle/access_token."
+                "it in KAGGLE_API_TOKEN, KAGGLE_ACCESS_TOKEN or ~/.kaggle/access_token."
             )
     with response:
         response.raise_for_status()
