@@ -736,7 +736,16 @@ def create_app(
             # Parse target IDs if provided
             target_id_list = None
             if target_ids:
-                target_id_list = [t.strip() for t in target_ids.split(",")]
+                target_id_list = [
+                    t.strip() for t in target_ids.split(",") if t.strip()
+                ] or None
+            if target_id_list:
+                unknown = [t for t in target_id_list if not engine.has_target(t)]
+                if unknown:
+                    raise HTTPException(
+                        status_code=404,
+                        detail=f"Unknown target_ids: {', '.join(unknown)}",
+                    )
             unavailable = [
                 t
                 for t in (target_id_list or engine.target_ids)

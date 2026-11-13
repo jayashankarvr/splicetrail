@@ -669,3 +669,19 @@ def test_probes_accept_head(path, monkeypatch):
     r = TestClient(create_app()).head(path)
     assert r.status_code == 200 and r.content == b""
 
+
+def test_match_unknown_target_ids_is_404(sample):
+    client = TestClient(create_app())
+    _index(client, "t0", sample.donor)
+    r = client.post(
+        "/match",
+        params={"target_ids": "t0,nope,gone"},
+        files={"file": _png(sample.tampered)},
+    )
+    assert r.status_code == 404
+    assert "nope" in r.json()["detail"] and "gone" in r.json()["detail"]
+    assert "t0" not in r.json()["detail"]
+    ok = client.post(
+        "/match", params={"target_ids": "t0, "}, files={"file": _png(sample.tampered)}
+    )
+    assert ok.status_code == 200 and ok.json()["detected"]
