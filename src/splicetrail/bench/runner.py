@@ -7,6 +7,8 @@ Usage:
     python -m splicetrail.bench.runner --n 40 --grade 0.15
     python -m splicetrail.bench.runner --dataset photos --n 60 --negatives 60 --calibrate
     python -m splicetrail.bench.runner --dataset casia2 --n 300 --negatives 300 --calibrate --json out.json
+    python -m splicetrail.bench.runner --dataset casia2 --n 40 --negatives 40 --query-scales 1.0 0.75 0.5
+    python -m splicetrail.bench.runner --dataset photos --n 20 --negatives 20 --thorough
 """
 
 from __future__ import annotations
@@ -99,11 +101,13 @@ def run(
 def _format_table(results: Dict[str, Dict]) -> str:
     cols = ["iou", "f1", "precision", "recall", "mcc", "det_auc", "sec_per_image"]
     width = max(len(n) for n in results) + 2
-    header = "detector".ljust(width) + "".join(c.rjust(13) for c in cols)
+    # Wider than the longest column name, so neighbouring names never touch.
+    col = max(len(c) for c in cols) + 2
+    header = "detector".ljust(width) + "".join(c.rjust(col) for c in cols)
     lines = [header, "-" * len(header)]
     for name, r in results.items():
         row = name.ljust(width) + "".join(
-            f"{r.get(c, float('nan')):13.4f}" for c in cols
+            f"{r.get(c, float('nan')):{col}.4f}" for c in cols
         )
         lines.append(row)
     return "\n".join(lines)
@@ -163,6 +167,18 @@ def _dataset_kwargs(args) -> Dict:
             copy_move=copy_move,
         )
     return dict(path=args.root)
+
+
+def _engine_config(args):
+    """The engine settings the command line asks for (defaults otherwise)."""
+    from splicetrail.engine import Config
+
+    kwargs: Dict = {}
+    if args.thorough:
+        kwargs["thorough"] = True
+    if args.query_scales:
+        kwargs["query_scales"] = list(args.query_scales)
+    return Config(**kwargs)
 
 
 def main(argv=None):
@@ -226,6 +242,20 @@ def main(argv=None):
     )
     p.add_argument("--seed", type=int, default=0)
     p.add_argument(
+        "--query-scales",
+        type=float,
+        nargs="+",
+        default=None,
+        metavar="SCALE",
+        help="also search the questioned image at these scales, e.g. 1.0 0.75 0.5 "
+        "(Config.query_scales; for copies enlarged before pasting)",
+    )
+    p.add_argument(
+        "--thorough",
+        action="store_true",
+        help="Config(thorough=True): also mirrored, enlarged and rotated copies",
+    )
+    p.add_argument(
         "--calibrate",
         action="store_true",
         help="also report false regions per pair vs NFA threshold",
@@ -235,13 +265,17 @@ def main(argv=None):
     )
     p.add_argument("--json", default=None, help="write all numbers to this file")
     args = p.parse_args(argv)
+    try:
+        config = _engine_config(args)
+    except ValueError as e:  # ConfigurationError, e.g. a query scale above 1
+        p.error(str(e))
 
     samples = load(args.dataset, **_dataset_kwargs(args))
     if not samples:
         raise SystemExit(f"no samples loaded from {args.dataset}")
     positives, negatives = split_labels(samples)
 
-    records = calibration.score_samples(samples, progress=True)
+    records = calibration.score_samples(samples, config=config, progress=True)
     results = {"splicetrail": calibration.summary(records)}
     if not args.no_baselines and all(
         s.donor is not None for s in samples
@@ -253,7 +287,8 @@ def main(argv=None):
     task = "copymove" if all(x.donor is None for x in samples) else "splice"
     print(
         f"\nSpliceTrail benchmark | {args.dataset} {task} | {len(positives)} pos + {len(negatives)} neg | "
-        f"grade={args.grade} jpeg={args.jpeg}\n"
+        f"grade={args.grade} jpeg={args.jpeg} thorough={args.thorough} "
+        f"query_scales={args.query_scales or [1.0]}\n"
     )
     print(_format_table(results))
 

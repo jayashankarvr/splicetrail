@@ -116,3 +116,52 @@ class TestMetrics:
     def test_aggregate_mean(self):
         agg = aggregate([{"iou": 0.0, "f1": 1.0}, {"iou": 1.0, "f1": 0.0}])
         assert agg["iou"] == 0.5 and agg["f1"] == 0.5
+
+
+class TestRunnerCommandLine:
+    def test_table_header_keeps_column_names_apart(self):
+        from splicetrail.bench.runner import _format_table
+
+        cols = ["iou", "f1", "precision", "recall", "mcc", "det_auc", "sec_per_image"]
+        table = _format_table({"splicetrail": {c: 0.5 for c in cols}})
+        header, _, row = table.splitlines()
+        assert header.split() == ["detector", *cols]
+        assert len(row) == len(header)
+
+    def _main_config(self, monkeypatch, *argv):
+        """Run the runner's main() with the slow parts stubbed; return the Config."""
+        from splicetrail.bench import runner
+        from splicetrail.bench.synthetic import make_recolored_splice
+
+        seen = {}
+
+        def score_samples(samples, config=None, progress=False):
+            seen["config"] = config
+            return []
+
+        monkeypatch.setattr(
+            runner, "load", lambda *a, **k: [make_recolored_splice(seed=0)]
+        )
+        monkeypatch.setattr(runner.calibration, "score_samples", score_samples)
+        monkeypatch.setattr(runner.calibration, "summary", lambda records: {})
+        runner.main(["--no-baselines", *argv])
+        return seen["config"]
+
+    def test_defaults_search_one_scale_and_not_thorough(self, monkeypatch):
+        config = self._main_config(monkeypatch)
+        assert config.query_scales == [1.0] and not config.thorough
+
+    def test_query_scales_flag_reaches_the_engine(self, monkeypatch):
+        config = self._main_config(monkeypatch, "--query-scales", "1.0", "0.75", "0.5")
+        assert config.query_scales == [1.0, 0.75, 0.5]
+
+    def test_thorough_flag_reaches_the_engine(self, monkeypatch):
+        config = self._main_config(monkeypatch, "--thorough")
+        assert config.thorough and config.query_scales == [1.0, 0.75, 0.5]
+
+    def test_bad_query_scale_is_a_usage_error(self, monkeypatch):
+        import pytest
+
+        with pytest.raises(SystemExit) as exc:
+            self._main_config(monkeypatch, "--query-scales", "1.0", "1.5")
+        assert exc.value.code == 2
