@@ -901,7 +901,7 @@ def create_app(
 
     @app.get("/targets")
     async def list_targets():
-        """List all indexed target images."""
+        """List all indexed target images (ids and sizes; never server paths)."""
         targets = []
         for image_id in engine.target_ids:
             shape = engine.get_target_shape(image_id)
@@ -909,7 +909,6 @@ def create_app(
                 {
                     "image_id": image_id,
                     "shape": {"height": shape[0], "width": shape[1]} if shape else None,
-                    "path": engine.get_target_path(image_id),
                 }
             )
         return {"targets": targets, "count": len(targets)}

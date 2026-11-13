@@ -364,6 +364,18 @@ def test_health_reports_counts_not_ids(sample):
     assert r.json()["index"]["target_count"] == 1 and "hidden" not in r.text
 
 
+def test_targets_hide_server_paths(sample, tmp_path, monkeypatch):
+    client = _persistent_app(monkeypatch, tmp_path)
+    client.post(
+        "/index", params={"image_id": "donor"}, files={"file": _png(sample.donor)}
+    )
+    r = client.get("/targets")
+    (target,) = r.json()["targets"]
+    assert set(target) == {"image_id", "shape"}
+    assert target["shape"] == {"height": 96, "width": 96}
+    assert str(tmp_path) not in r.text and ".png" not in r.text
+
+
 # --- 8. PhotoDNA gated -------------------------------------------------------
 
 
