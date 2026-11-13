@@ -71,7 +71,10 @@ class TestRings:
         np.testing.assert_allclose(
             desc.compute_batch(a)[0], desc.compute_batch(b)[0], atol=1e-4
         )
-        gray = lambda r: r @ np.array([0.299, 0.587, 0.114], np.float32)
+
+        def gray(r):
+            return r @ np.array([0.299, 0.587, 0.114], np.float32)
+
         angle = relative_angles(gray(a), gray(b))
         np.testing.assert_allclose(
             np.angle(np.exp(1j * (angle - np.pi / 2))), 0, atol=1e-3

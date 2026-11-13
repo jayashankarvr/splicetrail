@@ -1,8 +1,7 @@
 """Tests for spatial coherence verification."""
 
 import numpy as np
-import pytest
-from splicetrail.verification.coherence import SpatialCoherenceVerifier, CoherentRegion
+from splicetrail.verification.coherence import SpatialCoherenceVerifier
 from splicetrail.aggregation.heatmap import Match
 
 

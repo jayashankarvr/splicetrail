@@ -1,8 +1,7 @@
 """Tests for CLI parameter validation."""
 
+import click
 import pytest
-
-click = pytest.importorskip("click")
 
 from splicetrail.cli import build_config, validate_params
 

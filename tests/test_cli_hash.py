@@ -40,12 +40,14 @@ def run(*args):
 def test_prints_hashes():
     result = run(ORIGINAL, ROTATED, "--algorithm", "pdq", "--algorithm", "phash")
     assert result.exit_code == 0, result.output
-    lines = [l for l in result.output.splitlines() if l.strip()]
+    lines = [ln for ln in result.output.splitlines() if ln.strip()]
     assert len(lines) == 4
-    pdq_line = next(l for l in lines if "bridge-1-original.jpg" in l and "pdq" in l)
+    pdq_line = next(ln for ln in lines if "bridge-1-original.jpg" in ln and "pdq" in ln)
     assert expected_pdq("bridge-1-original.jpg") in pdq_line
     assert "quality=100" in pdq_line
-    phash_line = next(l for l in lines if "bridge-1-original.jpg" in l and "phash" in l)
+    phash_line = next(
+        ln for ln in lines if "bridge-1-original.jpg" in ln and "phash" in ln
+    )
     assert "quality" not in phash_line
 
 

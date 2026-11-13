@@ -1,10 +1,8 @@
 """Tests for image pyramid functionality."""
 
 import numpy as np
-import pytest
 from splicetrail.extraction.pyramid import (
     ImagePyramid,
-    PyramidPatchCollection,
     compute_effective_patch_size,
 )
 from splicetrail.extraction.patches import PatchExtractor

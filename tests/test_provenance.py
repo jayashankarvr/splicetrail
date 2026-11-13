@@ -1,7 +1,5 @@
 """Tests for the provenance graph."""
 
-import numpy as np
-
 from splicetrail import ForensicsEngine
 from splicetrail.bench.synthetic import (
     make_copy_move,
