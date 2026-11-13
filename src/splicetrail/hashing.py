@@ -2,7 +2,7 @@
 
 Every hash comes from the reference library (pdqhash, imagehash); nothing here
 re-implements an algorithm. The libraries are optional, installed with
-``pip install splicetrail[hash]``. libpHash is GPLv3, so it is never bundled;
+``pip install "splicetrail[hash]"``. libpHash is GPLv3, so it is never bundled;
 it is used only if the user installed it themselves.
 """
 
@@ -41,7 +41,7 @@ DEFAULT_DISTANCE: Dict[str, int] = {"pdq": 31, "phash": 10, "phash-lib": 10}
 # this size before hashing, with CImg's default (nearest neighbour) resize.
 _PDQ_DOWNSAMPLE = 512
 
-_INSTALL_HINT = "pip install splicetrail[hash]"
+_INSTALL_HINT = 'pip install "splicetrail[hash]"'
 
 # Every algorithm hashed in this process, whether or not its package is installed.
 LOCAL_ALGORITHMS = ("pdq", "phash", "phash-lib")
@@ -86,7 +86,9 @@ def _as_rgb(image: np.ndarray) -> np.ndarray:
     elif image.ndim == 3 and image.shape[2] == 4:
         image = image[:, :, :3]
     elif image.ndim != 3 or image.shape[2] != 3:
-        raise ValueError(f"expected a (H, W) or (H, W, 3) image, got shape {image.shape}")
+        raise ValueError(
+            f"expected a (H, W) or (H, W, 3) image, got shape {image.shape}"
+        )
     if image.dtype != np.uint8:
         image = _to_uint8(image)
     return np.ascontiguousarray(image)
@@ -106,7 +108,9 @@ def _to_uint8(image: np.ndarray) -> np.ndarray:
         return ((image.astype(np.uint32) + 128) // 257).astype(np.uint8)
     if np.issubdtype(image.dtype, np.integer):
         if image.size and (image.min() < 0 or image.max() > 255):
-            raise ValueError("integer pixels must be within 0..255 (or use uint8/uint16)")
+            raise ValueError(
+                "integer pixels must be within 0..255 (or use uint8/uint16)"
+            )
         return image.astype(np.uint8)
     if not np.issubdtype(image.dtype, np.floating):
         raise ValueError(f"unsupported pixel type {image.dtype}")
@@ -116,7 +120,9 @@ def _to_uint8(image: np.ndarray) -> np.ndarray:
     if low < 0 or top > 255:
         raise ValueError("float pixels must be within 0..1 or 0..255")
     scale = np.float32(255.0 if top <= 1.0 else 1.0)
-    return np.rint(image.astype(np.float32, copy=False) * scale).astype(np.uint8)
+    return np.asarray(
+        np.rint(image.astype(np.float32, copy=False) * scale).astype(np.uint8)
+    )
 
 
 def _bits_to_hex(bits: np.ndarray) -> str:
@@ -130,7 +136,9 @@ class _Pdq:
         try:
             import pdqhash
         except ImportError as e:
-            raise DependencyError(f"PDQ needs the pdqhash package: {_INSTALL_HINT}") from e
+            raise DependencyError(
+                f"PDQ needs the pdqhash package: {_INSTALL_HINT}"
+            ) from e
 
         rgb = _as_rgb(image)
         if dihedral:
@@ -164,13 +172,20 @@ class _Phash:
         try:
             import imagehash
         except ImportError as e:
-            raise DependencyError(f"pHash needs the imagehash package: {_INSTALL_HINT}") from e
+            raise DependencyError(
+                f"pHash needs the imagehash package: {_INSTALL_HINT}"
+            ) from e
 
         rgb = _as_rgb(image)
         images = dihedral_images(rgb) if dihedral else [rgb]
         names = VARIANTS if dihedral else VARIANTS[:1]
         return [
-            ImageHash(self.name, str(imagehash.phash(Image.fromarray(np.ascontiguousarray(img)))), None, variant)
+            ImageHash(
+                self.name,
+                str(imagehash.phash(Image.fromarray(np.ascontiguousarray(img)))),
+                None,
+                variant,
+            )
             for img, variant in zip(images, names)
         ]
 
@@ -207,7 +222,9 @@ def _load_phash_lib():
         lib = ctypes.CDLL(path)
     except OSError as e:
         if explicit:
-            raise DependencyError(f"SPLICETRAIL_PHASH_LIB={path} couldn't be loaded: {e}") from e
+            raise DependencyError(
+                f"SPLICETRAIL_PHASH_LIB={path} couldn't be loaded: {e}"
+            ) from e
         return None
     for symbol in _PHASH_SYMBOLS:
         try:
@@ -217,7 +234,9 @@ def _load_phash_lib():
         fn.argtypes = [ctypes.c_char_p, ctypes.POINTER(ctypes.c_uint64)]
         fn.restype = ctypes.c_int
         return fn
-    raise DependencyError(f"libpHash was found at {path} but doesn't export ph_dct_imagehash")
+    raise DependencyError(
+        f"libpHash was found at {path} but doesn't export ph_dct_imagehash"
+    )
 
 
 class _PhashLib:
@@ -242,7 +261,9 @@ class _PhashLib:
                 Image.fromarray(np.ascontiguousarray(img)).save(path, format="PPM")
                 value = ctypes.c_uint64()
                 if hash_file(os.fsencode(path), ctypes.byref(value)) != 0:
-                    raise RuntimeError(f"libpHash couldn't hash the image (variant '{variant}')")
+                    raise RuntimeError(
+                        f"libpHash couldn't hash the image (variant '{variant}')"
+                    )
             finally:
                 os.remove(path)
             out.append(ImageHash(self.name, f"{value.value:016x}", None, variant))
@@ -287,14 +308,20 @@ def hash_image(
         if name == "photodna":
             raise ValueError("photodna isn't hashed locally; use splicetrail.photodna")
         if name not in _ALGORITHMS:
-            raise ValueError(f"unknown hash algorithm '{name}'; available: {available_algorithms()}")
+            raise ValueError(
+                f"unknown hash algorithm '{name}'; available: {available_algorithms()}"
+            )
         out.extend(_ALGORITHMS[name].compute(image, dihedral))
     return out
 
 
 def hamming(a: Union[ImageHash, str], b: Union[ImageHash, str]) -> int:
     """Number of differing bits between two hashes of the same algorithm and length."""
-    if isinstance(a, ImageHash) and isinstance(b, ImageHash) and a.algorithm != b.algorithm:
+    if (
+        isinstance(a, ImageHash)
+        and isinstance(b, ImageHash)
+        and a.algorithm != b.algorithm
+    ):
         raise ValueError(f"can't compare '{a.algorithm}' with '{b.algorithm}' hashes")
     ha = a.hex if isinstance(a, ImageHash) else a
     hb = b.hex if isinstance(b, ImageHash) else b
@@ -315,7 +342,9 @@ class HashList:
     hexes: np.ndarray
     ids: np.ndarray
     # Per-algorithm (row indices, packed byte matrix), built on first use.
-    _matrices: Dict[str, tuple] = field(default_factory=dict, init=False, repr=False, compare=False)
+    _matrices: Dict[str, Optional[tuple]] = field(
+        default_factory=dict, init=False, repr=False, compare=False
+    )
 
     def __len__(self) -> int:
         return len(self.hexes)
@@ -375,7 +404,9 @@ def load_hash_list(path: str, algorithm: Optional[str] = None) -> HashList:
                 if row[0].lower() in ("algorithm", "hash"):
                     continue
             if len(row) > 3:
-                raise ValueError(f"{path}, line {line}: expected at most 3 columns, got {len(row)}")
+                raise ValueError(
+                    f"{path}, line {line}: expected at most 3 columns, got {len(row)}"
+                )
             if len(row) == 3:
                 name, value, ident = row[0].lower(), row[1], row[2]
             else:
@@ -384,7 +415,8 @@ def load_hash_list(path: str, algorithm: Optional[str] = None) -> HashList:
                 if name is None:
                     raise MissingAlgorithmError(
                         f"{path}, line {line}: no algorithm column and none given; pass algorithm=",
-                        path, line,
+                        path,
+                        line,
                     )
                 name = name.lower()
             if name != "photodna":
@@ -434,8 +466,8 @@ def _distances(packed: np.ndarray, query: np.ndarray) -> np.ndarray:
     if hasattr(np, "bitwise_count"):  # numpy 2+
         if xor.shape[1] % 8 == 0:
             xor = xor.view(np.uint64)
-        return np.bitwise_count(xor).sum(axis=1, dtype=np.int64)
-    return _POPCOUNT[xor].sum(axis=1, dtype=np.int64)
+        return np.asarray(np.bitwise_count(xor).sum(axis=1, dtype=np.int64))
+    return np.asarray(_POPCOUNT[xor].sum(axis=1, dtype=np.int64))
 
 
 def match_hashes(
@@ -457,7 +489,11 @@ def match_hashes(
         if h.quality is not None and h.quality < min_quality:
             skipped.append(h)
             continue
-        limit = max_distance if max_distance is not None else DEFAULT_DISTANCE.get(h.algorithm)
+        limit = (
+            max_distance
+            if max_distance is not None
+            else DEFAULT_DISTANCE.get(h.algorithm)
+        )
         if limit is None or h.algorithm not in _HEX_LENGTH:
             continue
         found = hash_list.matrix(h.algorithm)

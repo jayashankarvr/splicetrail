@@ -10,7 +10,9 @@ from splicetrail.jpeg import quantization_sigma, quantization_sigma_for_quality
 
 
 def _save(tmp_path, name, fmt, **kw):
-    img = Image.fromarray((np.random.RandomState(0).rand(32, 32, 3) * 255).astype(np.uint8))
+    img = Image.fromarray(
+        (np.random.RandomState(0).rand(32, 32, 3) * 255).astype(np.uint8)
+    )
     path = tmp_path / name
     img.save(path, format=fmt, **kw)
     return str(path)
@@ -42,4 +44,8 @@ def test_measured_error_is_close_to_model():
     back = np.asarray(Image.open(buf)).astype(np.float64)
     luma = np.array([0.299, 0.587, 0.114])
     measured = np.std((back - img) @ luma) / 255
-    assert 0.3 * quantization_sigma_for_quality(85) < measured < 1.2 * quantization_sigma_for_quality(85)
+    assert (
+        0.3 * quantization_sigma_for_quality(85)
+        < measured
+        < 1.2 * quantization_sigma_for_quality(85)
+    )

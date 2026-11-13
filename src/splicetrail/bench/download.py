@@ -17,7 +17,12 @@ import os
 import sys
 from pathlib import Path
 
-from splicetrail.bench.datasets import CASIA2_KAGGLE_REF, COMOFOD_KAGGLE_REF, COVERAGE_KAGGLE_REF, data_dir
+from splicetrail.bench.datasets import (
+    CASIA2_KAGGLE_REF,
+    COMOFOD_KAGGLE_REF,
+    COVERAGE_KAGGLE_REF,
+    data_dir,
+)
 
 # name -> (kaggle ref, folder, a path that must exist afterwards, minimum files under it)
 DATASETS = {
@@ -48,7 +53,9 @@ def _kaggle_api():
     try:
         from kaggle.api.kaggle_api_extended import KaggleApi
     except ImportError:
-        raise SystemExit("the kaggle package is needed: pip install splicetrail[bench]")
+        raise SystemExit(
+            'the kaggle package is needed: pip install "splicetrail[bench]"'
+        )
     api = KaggleApi()
     api.authenticate()
     return api
@@ -67,7 +74,30 @@ def _download_with_token(ref: str, target: Path, token: str) -> None:
 
     archive = target / "archive.zip"
     url = f"https://www.kaggle.com/api/v1/datasets/download/{ref}"
-    with requests.get(url, headers={"Authorization": f"Bearer {token}"}, stream=True, timeout=60) as response:
+    response = requests.get(
+        url, headers={"Authorization": f"Bearer {token}"}, stream=True, timeout=60
+    )
+    if response.status_code in (401, 403, 404):
+        # A stale or revoked token gets 401/403/404 even for public datasets,
+        # which may also be served without authentication: retry once without it.
+        first = response.status_code
+        response.close()
+        print(
+            f"Kaggle refused the request with your token (HTTP {first}); "
+            "retrying without it",
+            file=sys.stderr,
+        )
+        response = requests.get(url, stream=True, timeout=60)
+        if not response.ok:
+            second = response.status_code
+            response.close()
+            raise SystemExit(
+                f"Kaggle refused {ref}: HTTP {first} with your token, HTTP {second} "
+                "without it. Either the token is expired or revoked, or the dataset "
+                "is gone. Create a new token at kaggle.com -> Settings -> API and put "
+                "it in KAGGLE_API_TOKEN, KAGGLE_ACCESS_TOKEN or ~/.kaggle/access_token."
+            )
+    with response:
         response.raise_for_status()
         with open(archive, "wb") as f:
             for chunk in response.iter_content(chunk_size=1 << 20):
@@ -90,16 +120,24 @@ def download(name: str) -> Path:
     if token:
         _download_with_token(ref, target, token)
     else:
-        _kaggle_api().dataset_download_files(ref, path=str(target), unzip=True, quiet=False)
+        _kaggle_api().dataset_download_files(
+            ref, path=str(target), unzip=True, quiet=False
+        )
     count = sum(1 for _ in done.iterdir()) if done.exists() else 0
     if count < min_files:
-        raise SystemExit(f"download looks incomplete: {count} files in {done}, expected >= {min_files}")
+        raise SystemExit(
+            f"download looks incomplete: {count} files in {done}, expected >= {min_files}"
+        )
     print(f"{name}: {count} files in {done}")
     return target
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        prog="python -m splicetrail.bench.download",
+        description=__doc__,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     parser.add_argument("dataset", choices=sorted(DATASETS))
     args = parser.parse_args(argv)
     download(args.dataset)

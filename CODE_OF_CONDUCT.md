@@ -22,6 +22,12 @@ We pledge to make participation in our project a harassment-free experience for 
 
 Project maintainers may remove, edit, or reject comments, commits, code, issues, and other contributions that violate this Code of Conduct. Maintainers who do not follow the Code of Conduct may be removed from the project team.
 
+To report a problem, contact the maintainer privately through their GitHub
+profile, https://github.com/jayashankarvr . For anything sensitive, use the
+private security advisory form instead:
+https://github.com/jayashankarvr/splicetrail/security/advisories/new . Reports
+are kept confidential.
+
 ## Attribution
 
 This Code of Conduct is adapted from the [Contributor Covenant](https://www.contributor-covenant.org), version 2.1.

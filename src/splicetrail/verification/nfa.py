@@ -74,7 +74,9 @@ def fdr_select(results: Sequence, q: float = 0.05) -> List:
     Returns:
         The selected regions, most significant first.
     """
-    regions = [r for res in results for r in res.coherent_regions if r.log10_p is not None]
+    regions = [
+        r for res in results for r in res.coherent_regions if r.log10_p is not None
+    ]
     m = sum(res.stats.get("n_tests", 0.0) for res in results)
     if not regions or m <= 0:
         return []

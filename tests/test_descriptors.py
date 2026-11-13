@@ -32,7 +32,10 @@ class TestLuminanceDescriptor:
         a, _ = d.compute_batch(p)
         b, _ = d.compute_batch(graded)
         unrelated, _ = d.compute_batch(_patches(size=5, seed=9))
-        assert np.median(((a - b) ** 2).sum(1)) < np.median(((a - unrelated) ** 2).sum(1)) / 5
+        assert (
+            np.median(((a - b) ** 2).sum(1))
+            < np.median(((a - unrelated) ** 2).sum(1)) / 5
+        )
 
     def test_flat_patches_flagged(self):
         p = _patches(4, size=3)
@@ -47,9 +50,10 @@ class TestLuminanceDescriptor:
             LuminanceDescriptor(3).compute_batch(_patches(size=4))
 
     def test_empty_batch(self):
-        desc, textured = LuminanceDescriptor(3).compute_batch(np.zeros((0, 3, 3, 3), np.float32))
+        desc, textured = LuminanceDescriptor(3).compute_batch(
+            np.zeros((0, 3, 3, 3), np.float32)
+        )
         assert desc.shape == (0, 9) and textured.shape == (0,)
 
     def test_luminance_weights(self):
         assert luminance(np.ones((1, 3), np.float32))[0] == pytest.approx(1.0)
-

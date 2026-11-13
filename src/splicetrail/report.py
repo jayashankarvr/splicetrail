@@ -139,7 +139,9 @@ def _color_transform(
     b = np.asarray(b, dtype=float)
     if M.shape != (3, 3) or b.shape != (3,):
         return None
-    is_identity = bool(np.allclose(M, np.eye(3), atol=1e-3) and np.allclose(b, 0, atol=1e-3))
+    is_identity = bool(
+        np.allclose(M, np.eye(3), atol=1e-3) and np.allclose(b, 0, atol=1e-3)
+    )
     return {
         "M": np.round(M, ndigits).tolist(),
         "b": np.round(b, ndigits).tolist(),
@@ -179,7 +181,9 @@ def _region_color_transform(region: Any) -> Optional[Dict[str, Any]]:
     bs = [m.color_b for m in region.matches if getattr(m, "color_b", None) is not None]
     if not Ms or not bs:
         return None
-    return _color_transform(np.median(np.stack(Ms), axis=0), np.median(np.stack(bs), axis=0))
+    return _color_transform(
+        np.median(np.stack(Ms), axis=0), np.median(np.stack(bs), axis=0)
+    )
 
 
 def _best_log10_nfa(result: Any) -> Optional[float]:
@@ -278,7 +282,11 @@ def build_report(
                 "source_bbox": _bbox_dict(region.source_bbox),
                 "target_bbox": _bbox_dict(region.target_bbox),
                 "color_transform": _region_color_transform(region),
-                "log10_nfa": None if region.log10_nfa is None else round(float(region.log10_nfa), 4),
+                "log10_nfa": (
+                    None
+                    if region.log10_nfa is None
+                    else round(float(region.log10_nfa), 4)
+                ),
                 "significant": bool(region.significant),
                 "mirrored": bool(region.mirrored),
                 "source_scale": float(region.source_scale),

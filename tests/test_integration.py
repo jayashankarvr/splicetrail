@@ -47,7 +47,9 @@ class TestDetection:
         assert np.abs(region.color_M - expected).max() < 0.15
 
     def test_survives_jpeg(self):
-        sample = make_recolored_splice(seed=1, image_size=96, fragment_size=24, jpeg_quality=90)
+        sample = make_recolored_splice(
+            seed=1, image_size=96, fragment_size=24, jpeg_quality=90
+        )
         engine = ForensicsEngine()
         engine.index_target(sample.donor, "donor")
         result = engine.match(sample.tampered)
@@ -64,7 +66,14 @@ class TestDetection:
         rng = np.random.RandomState(0)
         for _ in range(3):
             donor, source = (
-                (np.clip(gaussian_filter(rng.rand(96, 96, 3), (1.5, 1.5, 0)) * 3 - 1, 0, 1) * 255).astype(np.uint8)
+                (
+                    np.clip(
+                        gaussian_filter(rng.rand(96, 96, 3), (1.5, 1.5, 0)) * 3 - 1,
+                        0,
+                        1,
+                    )
+                    * 255
+                ).astype(np.uint8)
                 for _ in range(2)
             )
             engine = ForensicsEngine()
@@ -121,7 +130,9 @@ class TestSignificance:
         crowded.index_target(splice.donor, "donor")
         for i in range(9):
             # same size as the donor, but flat: no patches, so never a hit
-            crowded.index_target(np.full((96, 96, 3), 60 + 10 * i, np.uint8), f"flat{i}")
+            crowded.index_target(
+                np.full((96, 96, 3), 60 + 10 * i, np.uint8), f"flat{i}"
+            )
         a = lone.match(splice.tampered).coherent_regions[0].log10_nfa
         b = crowded.match(splice.tampered).coherent_regions[0].log10_nfa
         assert b == pytest.approx(a + 1.0, abs=0.05)  # 10x the targets -> +1 in log10
@@ -166,14 +177,18 @@ class TestIndexLifecycle:
     def test_max_targets_evicts_oldest(self):
         engine = ForensicsEngine(Config(max_targets=2))
         for i in range(3):
-            engine.index_target(make_negative_pair(seed=i, image_size=48).donor, f"t{i}")
+            engine.index_target(
+                make_negative_pair(seed=i, image_size=48).donor, f"t{i}"
+            )
         assert engine.target_ids == ["t1", "t2"]
         assert engine.index.image_ids == ["t1", "t2"]
 
     def test_failed_index_does_not_evict(self, monkeypatch):
         engine = ForensicsEngine(Config(max_targets=2))
         for i in range(2):
-            engine.index_target(make_negative_pair(seed=i, image_size=48).donor, f"t{i}")
+            engine.index_target(
+                make_negative_pair(seed=i, image_size=48).donor, f"t{i}"
+            )
 
         def boom(image):
             raise MemoryError("simulated")
@@ -204,7 +219,9 @@ class TestIndexLifecycle:
         Image.fromarray(splice.donor).save(donor_path)
 
         engine = ForensicsEngine()
-        engine.index_target(load_image(str(donor_path)), "donor", image_path=str(donor_path))
+        engine.index_target(
+            load_image(str(donor_path)), "donor", image_path=str(donor_path)
+        )
         expected = engine.match(splice.tampered).coherent_regions[0].offset
         engine.save(str(tmp_path / "bundle"))
 
@@ -219,7 +236,9 @@ class TestIndexLifecycle:
         engine = ForensicsEngine(Config(patch_size=4))
         engine.index_target(splice.donor, "donor")
         engine.save(str(tmp_path / "bundle"))
-        loaded = ForensicsEngine.load(str(tmp_path / "bundle"), patch_size=6, min_probability=0.2)
+        loaded = ForensicsEngine.load(
+            str(tmp_path / "bundle"), patch_size=6, min_probability=0.2
+        )
         assert loaded.config.patch_size == 4
         assert loaded.config.min_probability == 0.2
 
@@ -247,7 +266,9 @@ class TestIndexLifecycle:
 
     def test_missing_image_file_is_skipped(self, splice, tmp_path):
         engine = ForensicsEngine()
-        engine.index_target(splice.donor, "donor", image_path=str(tmp_path / "gone.png"))
+        engine.index_target(
+            splice.donor, "donor", image_path=str(tmp_path / "gone.png")
+        )
         engine.save(str(tmp_path / "bundle"))
         loaded = ForensicsEngine.load(str(tmp_path / "bundle"))
         result = loaded.match(splice.tampered)

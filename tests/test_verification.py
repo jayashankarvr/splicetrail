@@ -2,7 +2,11 @@
 
 import numpy as np
 import pytest
-from splicetrail.verification.affine import AffineVerifier, VerificationResult, fit_gain_offset_batch
+from splicetrail.verification.affine import (
+    AffineVerifier,
+    VerificationResult,
+    fit_gain_offset_batch,
+)
 from splicetrail.verification.probability import ProbabilityModel
 
 
@@ -100,7 +104,7 @@ class TestAffineVerifier:
         )
 
         assert not result.success
-        assert result.rss == float('inf')
+        assert result.rss == float("inf")
 
 
 class TestProbabilityModel:
@@ -151,7 +155,9 @@ class TestGainOffsetBatch:
         weights = np.ones_like(src)
         assert fit_gain_offset_batch(src, tgt, weights)[0] > 1.0
         weights[0, 3] = 0.0
-        assert fit_gain_offset_batch(src, tgt, weights)[0] == pytest.approx(0.0, abs=1e-12)
+        assert fit_gain_offset_batch(src, tgt, weights)[0] == pytest.approx(
+            0.0, abs=1e-12
+        )
 
 
 class TestProbabilityVectorized:

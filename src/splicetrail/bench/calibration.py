@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import time
 from dataclasses import dataclass, field
-from typing import Dict, List, Sequence
+from typing import Dict, List, Optional, Sequence, cast
 
 import numpy as np
 
@@ -31,17 +31,17 @@ HIT_OVERLAP = 0.5
 @dataclass
 class RegionRecord:
     log10_nfa: float
-    on_splice: bool          # footprint mostly inside the ground-truth mask
+    on_splice: bool  # footprint mostly inside the ground-truth mask
 
 
 @dataclass
 class SampleRecord:
     label: int
     regions: List[RegionRecord] = field(default_factory=list)
-    mask: np.ndarray = None          # predicted localization at the engine's max_nfa
-    gt_mask: np.ndarray = None
+    mask: Optional[np.ndarray] = None  # predicted localization at the engine's max_nfa
+    gt_mask: Optional[np.ndarray] = None
     seconds: float = 0.0
-    marks_copy_only: bool = False    # gt_mask marks the pasted copy but not its source
+    marks_copy_only: bool = False  # gt_mask marks the pasted copy but not its source
 
     @property
     def score(self) -> float:
@@ -49,7 +49,9 @@ class SampleRecord:
         return -min((r.log10_nfa for r in self.regions), default=1e9)
 
 
-def score_samples(samples: Sequence, config=None, progress: bool = False) -> List[SampleRecord]:
+def score_samples(
+    samples: Sequence, config=None, progress: bool = False
+) -> List[SampleRecord]:
     """Run SpliceTrail once per sample (index donor, query tampered) and keep every region.
 
     ``progress`` prints a line to stderr every 10 samples (long real-data runs).
@@ -69,37 +71,56 @@ def score_samples(samples: Sequence, config=None, progress: bool = False) -> Lis
             result = engine.match_self(sample.tampered, jpeg_sigma=source_sigma)
         else:
             engine.index_target(sample.donor, "donor", jpeg_sigma=donor_sigma)
-            result = engine.match(sample.tampered, return_heatmap=False, jpeg_sigma=source_sigma)
+            result = engine.match(
+                sample.tampered, return_heatmap=False, jpeg_sigma=source_sigma
+            )
         shape = sample.tampered.shape[:2]
         regions = []
         marks_copy_only = (sample.params or {}).get("mask_marks") == "copy"
         for region in result.coherent_regions:
-            footprint = localize_region(region.matches, shape, largest_component=False).mask
+            footprint = localize_region(
+                region.matches, shape, largest_component=False
+            ).mask
             if sample.donor is None and marks_copy_only:
                 # The mask marks the pasted copy but not its original: a region
                 # is right if either of its two halves lands on the copy. Without
                 # the source mask, a region pairing the copy with a look-alike
                 # rather than its true source also counts.
                 halves = (footprint, _target_footprint(region, shape))
-                hit = any((h & sample.mask).sum() / max(h.sum(), 1) >= HIT_OVERLAP for h in halves)
-                regions.append(RegionRecord(float(region.log10_nfa), bool(hit)))
+                hit = any(
+                    (h & sample.mask).sum() / max(h.sum(), 1) >= HIT_OVERLAP
+                    for h in halves
+                )
+                regions.append(
+                    RegionRecord(float(cast(float, region.log10_nfa)), bool(hit))
+                )
                 continue
             if sample.donor is None:
                 footprint |= _target_footprint(region, shape)
             inside = (footprint & sample.mask).sum() / max(footprint.sum(), 1)
-            regions.append(RegionRecord(float(region.log10_nfa), bool(inside >= HIT_OVERLAP)))
-        records.append(SampleRecord(
-            label=sample.label,
-            regions=regions,
-            mask=result.localization.mask,
-            gt_mask=sample.mask,
-            seconds=time.perf_counter() - start,
-            marks_copy_only=marks_copy_only,
-        ))
+            regions.append(
+                RegionRecord(
+                    float(cast(float, region.log10_nfa)), bool(inside >= HIT_OVERLAP)
+                )
+            )
+        assert result.localization is not None  # match/match_self always set it
+        records.append(
+            SampleRecord(
+                label=sample.label,
+                regions=regions,
+                mask=result.localization.mask,
+                gt_mask=sample.mask,
+                seconds=time.perf_counter() - start,
+                marks_copy_only=marks_copy_only,
+            )
+        )
         if progress and (i % 10 == 0 or i == len(samples)):
             elapsed = time.perf_counter() - t0
-            print(f"  {i}/{len(samples)} samples done, {elapsed:.0f}s, ~{elapsed / i * (len(samples) - i):.0f}s left",
-                  file=sys.stderr, flush=True)
+            print(
+                f"  {i}/{len(samples)} samples done, {elapsed:.0f}s, ~{elapsed / i * (len(samples) - i):.0f}s left",
+                file=sys.stderr,
+                flush=True,
+            )
     return records
 
 
@@ -110,7 +131,11 @@ def _jpeg_sigmas(sample):
     params = sample.params or {}
     if "tampered_path" in params:
         source = quantization_sigma(params["tampered_path"]) or 0.0
-        donor = (quantization_sigma(params["donor_path"]) or 0.0) if "donor_path" in params else 0.0
+        donor = (
+            (quantization_sigma(params["donor_path"]) or 0.0)
+            if "donor_path" in params
+            else 0.0
+        )
         return source, donor
     quality = params.get("jpeg_quality")
     return (quantization_sigma_for_quality(quality) if quality else 0.0), 0.0
@@ -120,31 +145,45 @@ def _target_footprint(region, shape) -> np.ndarray:
     mask = np.zeros(shape, dtype=bool)
     for m in region.matches:
         x, y = m.target_coord
-        mask[y:y + m.patch_size, x:x + m.patch_size] = True
+        mask[y : y + m.patch_size, x : x + m.patch_size] = True
     return mask
 
 
-def calibration_table(records: Sequence[SampleRecord], epsilons=EPSILONS) -> List[Dict[str, float]]:
+def calibration_table(
+    records: Sequence[SampleRecord], epsilons=EPSILONS
+) -> List[Dict[str, float]]:
     """One row per threshold: false regions per pair (should be <= eps) and recall."""
     positives = [r for r in records if r.label == 1]
     rows = []
     for eps in epsilons:
         cut = np.log10(eps)
         false_regions = sum(
-            1 for rec in records for reg in rec.regions
+            1
+            for rec in records
+            for reg in rec.regions
             if reg.log10_nfa < cut and not (rec.label == 1 and reg.on_splice)
         )
         null_pairs_hit = sum(
-            1 for rec in records if rec.label == 0 and any(reg.log10_nfa < cut for reg in rec.regions)
+            1
+            for rec in records
+            if rec.label == 0 and any(reg.log10_nfa < cut for reg in rec.regions)
         )
         n_null = sum(1 for rec in records if rec.label == 0)
-        found = sum(1 for rec in positives if any(reg.log10_nfa < cut and reg.on_splice for reg in rec.regions))
-        rows.append({
-            "epsilon": eps,
-            "false_regions_per_pair": false_regions / max(len(records), 1),
-            "null_pairs_with_alarm": null_pairs_hit / n_null if n_null else float("nan"),
-            "recall": found / len(positives) if positives else float("nan"),
-        })
+        found = sum(
+            1
+            for rec in positives
+            if any(reg.log10_nfa < cut and reg.on_splice for reg in rec.regions)
+        )
+        rows.append(
+            {
+                "epsilon": eps,
+                "false_regions_per_pair": false_regions / max(len(records), 1),
+                "null_pairs_with_alarm": (
+                    null_pairs_hit / n_null if n_null else float("nan")
+                ),
+                "recall": found / len(positives) if positives else float("nan"),
+            }
+        )
     return rows
 
 
@@ -156,18 +195,34 @@ def summary(records: Sequence[SampleRecord]) -> Dict[str, float]:
     so only recall (how much of the copy is covered) is reported for those.
     """
     positives = [r for r in records if r.label == 1]
-    out = aggregate([localization_scores(r.mask, r.gt_mask) for r in positives])
+    # Records from run() always carry both masks; table-only records may not.
+    out = aggregate(
+        [
+            localization_scores(cast(np.ndarray, r.mask), cast(np.ndarray, r.gt_mask))
+            for r in positives
+        ]
+    )
     if positives and all(r.marks_copy_only for r in positives):
-        out.update(iou=float("nan"), f1=float("nan"), precision=float("nan"), mcc=float("nan"))
+        out.update(
+            iou=float("nan"), f1=float("nan"), precision=float("nan"), mcc=float("nan")
+        )
     has_negatives = any(r.label == 0 for r in records)
-    out["det_auc"] = detection_auc([r.score for r in records], [r.label for r in records]) if has_negatives else float("nan")
-    out["sec_per_image"] = float(np.mean([r.seconds for r in records])) if records else float("nan")
+    out["det_auc"] = (
+        detection_auc([r.score for r in records], [r.label for r in records])
+        if has_negatives
+        else float("nan")
+    )
+    out["sec_per_image"] = (
+        float(np.mean([r.seconds for r in records])) if records else float("nan")
+    )
     return out
 
 
 def format_table(rows: Sequence[Dict[str, float]]) -> str:
-    lines = ["  epsilon   false regions/pair   null pairs w/ alarm   recall",
-             "  " + "-" * 58]
+    lines = [
+        "  epsilon   false regions/pair   null pairs w/ alarm   recall",
+        "  " + "-" * 58,
+    ]
     for row in rows:
         ok = "ok" if row["false_regions_per_pair"] <= row["epsilon"] else "OVER"
         lines.append(

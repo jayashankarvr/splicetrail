@@ -55,8 +55,13 @@ class LuminanceDescriptor:
             (descriptors (N, s*s) float32, textured (N,) bool). Descriptors of
             flat patches (textured == False) are zero.
         """
-        if patches.ndim != 4 or patches.shape[1:3] != (self.patch_size, self.patch_size):
-            raise ValueError(f"expected {self.patch_size}x{self.patch_size} patches, got {patches.shape[1:3]}")
+        if patches.ndim != 4 or patches.shape[1:3] != (
+            self.patch_size,
+            self.patch_size,
+        ):
+            raise ValueError(
+                f"expected {self.patch_size}x{self.patch_size} patches, got {patches.shape[1:3]}"
+            )
         gray = luminance(patches.astype(np.float32)).reshape(len(patches), self.dim)
         gray -= gray.mean(axis=1, keepdims=True)
         norm = np.linalg.norm(gray, axis=1)

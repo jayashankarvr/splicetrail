@@ -58,15 +58,21 @@ def test_key_from_environment(monkeypatch):
 
 
 def test_sends_image_and_key_header():
-    verdict = {"Status": {"Code": 3000}, "IsMatch": True, "MatchDetails": {"MatchFlags": []}}
+    verdict = {
+        "Status": {"Code": 3000},
+        "IsMatch": True,
+        "MatchDetails": {"MatchFlags": []},
+    }
     client = PhotoDnaClient(key=KEY, endpoint=ENDPOINT, timeout=7.5)
     with patch("requests.post", return_value=response(json_body=verdict)) as post:
         assert client.match(b"\x00\x01image") == verdict
     assert post.call_args.args[0] == ENDPOINT
     kw = post.call_args.kwargs
     assert kw["headers"]["Ocp-Apim-Subscription-Key"] == KEY
-    assert kw["json"] == {"DataRepresentation": "inline",
-                          "Value": base64.b64encode(b"\x00\x01image").decode()}
+    assert kw["json"] == {
+        "DataRepresentation": "inline",
+        "Value": base64.b64encode(b"\x00\x01image").decode(),
+    }
     assert kw["timeout"] == 7.5
 
 
@@ -74,7 +80,10 @@ def test_default_endpoint():
     client = PhotoDnaClient(key=KEY)
     with patch("requests.post", return_value=response(json_body={})) as post:
         client.match(b"x")
-    assert post.call_args.args[0] == "https://api.microsoftmoderator.com/photodna/v1.0/Match"
+    assert (
+        post.call_args.args[0]
+        == "https://api.microsoftmoderator.com/photodna/v1.0/Match"
+    )
 
 
 def test_repr_hides_key():
@@ -90,10 +99,17 @@ def test_service_error_hides_key(outcome, caplog):
     elif outcome == "connection":
         kwargs = {"side_effect": requests.ConnectionError(f"refused for {KEY}")}
     elif outcome == "http500":
-        kwargs = {"return_value": response(500, text=f"boom {KEY}", json_error=ValueError("no json"))}
+        kwargs = {
+            "return_value": response(
+                500, text=f"boom {KEY}", json_error=ValueError("no json")
+            )
+        }
     else:
-        kwargs = {"return_value": response(200, text=f"<html>{KEY}</html>",
-                                           json_error=ValueError("not json"))}
+        kwargs = {
+            "return_value": response(
+                200, text=f"<html>{KEY}</html>", json_error=ValueError("not json")
+            )
+        }
     with caplog.at_level(logging.DEBUG), patch("requests.post", **kwargs):
         with pytest.raises(PhotoDnaError) as exc:
             client.match(b"img")
@@ -140,6 +156,7 @@ def test_cli_json_and_local_algorithms(tmp_path):
         result = run(str(IMAGE), "-a", "pdq", "-a", "photodna", "--json", str(out))
     assert result.exit_code == 0, result.output
     import json
+
     image = json.loads(out.read_text())["images"][0]
     assert image["photodna"] == {"IsMatch": True}
     assert [h["algorithm"] for h in image["hashes"]] == ["pdq"]
@@ -161,13 +178,16 @@ def test_cli_service_error_exits_cleanly():
     assert "HTTP 500" in result.output
 
 
-@pytest.mark.parametrize("endpoint", [
-    "http://photodna.example.test/Match",
-    "ftp://photodna.example.test/Match",
-    "photodna.example.test/Match",
-    f"https://user:{KEY}@photodna.example.test/Match",
-    "https://user@photodna.example.test/Match",
-])
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        "http://photodna.example.test/Match",
+        "ftp://photodna.example.test/Match",
+        "photodna.example.test/Match",
+        f"https://user:{KEY}@photodna.example.test/Match",
+        "https://user@photodna.example.test/Match",
+    ],
+)
 def test_bad_endpoint_refused(endpoint):
     with pytest.raises(PhotoDnaError) as exc:
         PhotoDnaClient(key=KEY, endpoint=endpoint)
@@ -175,22 +195,31 @@ def test_bad_endpoint_refused(endpoint):
 
 
 def test_bad_endpoint_from_environment_refused(monkeypatch):
-    monkeypatch.setenv("SPLICETRAIL_PHOTODNA_ENDPOINT", "http://photodna.example.test/Match")
+    monkeypatch.setenv(
+        "SPLICETRAIL_PHOTODNA_ENDPOINT", "http://photodna.example.test/Match"
+    )
     with pytest.raises(PhotoDnaError):
         PhotoDnaClient(key=KEY)
 
 
-@pytest.mark.parametrize("endpoint", [
-    "http://127.0.0.1:8080/Match", "http://localhost/Match", "http://[::1]:9/Match",
-    "https://photodna.example.test/Match",
-])
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        "http://127.0.0.1:8080/Match",
+        "http://localhost/Match",
+        "http://[::1]:9/Match",
+        "https://photodna.example.test/Match",
+    ],
+)
 def test_good_endpoint_accepted(endpoint):
     assert PhotoDnaClient(key=KEY, endpoint=endpoint).endpoint == endpoint
 
 
 def test_redirect_refused():
     client = PhotoDnaClient(key=KEY, endpoint=ENDPOINT)
-    with patch("requests.post", return_value=response(302, json_error=ValueError())) as post:
+    with patch(
+        "requests.post", return_value=response(302, json_error=ValueError())
+    ) as post:
         with pytest.raises(PhotoDnaError, match="302") as exc:
             client.match(b"img")
     assert post.call_args.kwargs["allow_redirects"] is False
@@ -215,10 +244,13 @@ def test_cli_announces_upload_on_stderr():
     assert "Sending" not in result.stdout
 
 
-@pytest.mark.parametrize("endpoint", [
-    "http://localhost.evil.com/Match",
-    "http://127.0.0.1@evil.com/Match",
-])
+@pytest.mark.parametrize(
+    "endpoint",
+    [
+        "http://localhost.evil.com/Match",
+        "http://127.0.0.1@evil.com/Match",
+    ],
+)
 def test_lookalike_loopback_hosts_refused(endpoint):
     with pytest.raises(PhotoDnaError):
         PhotoDnaClient(key=KEY, endpoint=endpoint)

@@ -7,10 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-This release reworks the matching pipeline. On the synthetic benchmark
+## [0.3.0] - 2026-11-13
+
+This release reworks the matching pipeline and makes the REST API safe to
+expose. On the synthetic benchmark
 (`python -m splicetrail.bench.runner --n 20 --negatives 20`) localization IoU goes from
 0.48 to 0.85, detection AUC from 0.74 to 0.96, and time per image from 41 s to
 0.6 s. With JPEG q85 it reaches IoU 0.78 / AUC 0.95.
+
+### Breaking changes
+- **Descriptor rework**: patches are described by their normalized luminance pattern instead of the composite descriptor. Index files from 0.2.x can't be loaded; re-index.
+- **Per-patch `probability` is now `fit_p_value`** (API `best_match`, JSON report). It is a goodness-of-fit pre-filter, not a match probability; decisions are made per region by NFA.
+- **JSON report schema 2.2** (`fit_p_value`, per-region `log10_nfa`/`significant`, `localization.detection_score` is `-log10(NFA)`, input hashes); readers of the earlier 1.x schema need updating.
+- **Python 3.8 is no longer supported**; 3.9 to 3.13 are.
+- **`splicetrail serve` binds to `127.0.0.1` by default** (was `0.0.0.0`). Pass `--host 0.0.0.0` and set `SPLICETRAIL_API_KEY` to serve other machines.
+- The API caps `/index` and `/match` uploads at 500,000 pixels by default (was 50 megapixels; `SPLICETRAIL_MAX_IMAGE_PIXELS`), keeps at most 1000 targets unless `SPLICETRAIL_MAX_TARGETS` says otherwise, no longer lists target ids in `/health` or file paths in `/targets`, and refuses `photodna` without an API key.
+- `scoring_mode="bayes"`, the LSH pre-filter, `ShardedIndex`, `LearnedDescriptor`, the GPU path and their config fields are removed (see Removed).
+
+### Security
+- **API key**: with `SPLICETRAIL_API_KEY` set, every endpoint except `/health/live` and `/health/ready` needs a matching `X-API-Key` header (401 otherwise), including `/docs` and `/openapi.json`. Starting on a non-loopback address without a key logs a warning.
+- Uploads over 50 MB are refused from `Content-Length` before the body is read, and cut off while streaming when there is none (413). The pixel cap is checked before decoding, and PIL's process-wide decompression-bomb limit is no longer changed on import.
+- A request waits at most `SPLICETRAIL_LOCK_TIMEOUT` seconds (default 30) for the engine, then gets 503 with `Retry-After`; image decoding runs off the event loop too.
+- `/hash?algorithm=photodna` is refused (403) unless both `SPLICETRAIL_API_KEY` and `SPLICETRAIL_PHOTODNA_KEY` are set, so only key holders can send images to Microsoft.
+- Unexpected errors return a fixed message and a request id (also in `X-Request-ID`); details go to the server log only. `/hash` no longer echoes exception text, and `/match` returns only its own input-check messages as 400.
+- With `SPLICETRAIL_API_KEY` set, `/health/ready` (which needs no key) returns only its status to callers without the key; target count, index size and free space need the key.
+- Docker: compose publishes the API on the host's `127.0.0.1` only and passes `SPLICETRAIL_API_KEY` through; nginx allows 51 MB bodies for multipart framing.
+
+### Added (release)
+- **Persistent API index**: `SPLICETRAIL_INDEX_DIR` loads the index at startup and saves it after every index and delete, as a complete snapshot switched in atomically; indexed images are kept there as lossless PNGs. The Docker image sets it to `/data`. `/health/ready` checks that the directory is writable and reports free space; `/health` reports `max_targets` and `persistent`. Snapshots name images relative to the directory, so it can be moved or copied. A target whose image file is missing at startup is logged, shown with `image_available: false` in `/targets` and listed in `/match`'s `unavailable_targets`. An index directory the server can't write to stops startup with a one-line message naming it (create a bind-mounted `./data` before `docker run`; Docker makes a missing one owned by root).
+- Benchmark runner `--query-scales` and `--thorough`, and `python -m splicetrail.bench.index_size` (flat vs IVF-PQ size and search time), so the README's numbers can be reproduced.
+- Python 3.9 to 3.13 support; CI tests every version with every extra, plus lint (ruff, black, mypy with pinned versions) and build (`twine check`) jobs. mypy is clean.
+
+### Changed (release)
+- `python -m splicetrail test` explains that it needs a source checkout and pytest, and exits 1, instead of failing with a traceback. `python -m splicetrail match` no longer suggests a nonexistent `[cli]` extra.
+- Install hints quote extras (`pip install "splicetrail[hash]"`), which zsh needs.
+- Packaging: SPDX license metadata (`license = "Apache-2.0"`, `license-files`), `setuptools>=77`; the unused `requirements-lock.txt` is gone.
+- The API uses a lifespan handler instead of the deprecated `on_event`.
+- Docs: API key, server settings, persistence and status codes in `docs/API.md` and the README; Kubernetes example runs one replica (the index is per process); every benchmark number names its reproducing command; `thorough` measured at about 9x the default time (was stated as 13x); IVF-PQ re-measured (3.6x smaller, about 45x faster search on 200,000 descriptors); SECURITY.md reports go through GitHub private vulnerability reporting.
+- `/match` with `target_ids` naming a target that isn't indexed returns 404 listing the unknown ids (was 200 with `detected: false`).
+- `/health/live` and `/health/ready` accept `HEAD` (was 405).
+- Benchmark runner table header no longer runs `det_auc` and `sec_per_image` together.
 
 ### Fixed
 - **Targets indexed before PCA training were unmatchable.** PCA was fitted part-way through indexing, so earlier targets kept random-projection descriptors while queries used PCA. The descriptor no longer has any trained state.
@@ -24,9 +60,11 @@ This release reworks the matching pipeline. On the synthetic benchmark
 - The REST API ran indexing and matching on the event loop, which blocked health checks; they now run in a worker thread. Auto-generated image ids (`img_{count}`) collided after deletions; they're now random.
 - Index files are written with `os.replace` from the same directory (actually atomic). The old version deleted the existing files first, and loading still supported pickle.
 - API docs and README sent `image_id`, `target_ids` and `return_heatmap` as form fields, which the API ignored; they're query parameters.
+- `python -m splicetrail.bench.download` with an expired or revoked Kaggle token retries once without the token and otherwise exits with a message saying how to refresh the token, instead of a raw HTTP 404.
+- The `bench` and `full` extras install `six`, which `kaggle` 2.2.x imports without declaring; without it the kaggle client failed with `No module named 'six'`.
 
 ### Added
-- **Perceptual image hashes for checking images against known-hash lists** (`splicetrail.hashing`, `splicetrail hash`, `POST /hash`). PDQ (Meta's `pdqhash`, the format of ThreatExchange lists), pHash (`imagehash`) and, if you install libpHash yourself (GPLv3, never shipped), libpHash's `ph_dct_imagehash` as `phash-lib`. Lists are CSV (`algorithm,hash,id`); matches are within 31 bits for PDQ and 10 for pHash, PDQ hashes below quality 50 are skipped, and `--thorough` also hashes the eight rotations and flips. PDQ is checked against Meta's published reference hashes. Optional extra: `pip install splicetrail[hash]`.
+- **Perceptual image hashes for checking images against known-hash lists** (`splicetrail.hashing`, `splicetrail hash`, `POST /hash`). PDQ (Meta's `pdqhash`, the format of ThreatExchange lists), pHash (`imagehash`) and, if you install libpHash yourself (GPLv3, never shipped), libpHash's `ph_dct_imagehash` as `phash-lib`. Lists are CSV (`algorithm,hash,id`); matches are within 31 bits for PDQ and 10 for pHash, PDQ hashes below quality 50 are skipped, and `--thorough` also hashes the eight rotations and flips. PDQ is checked against Meta's published reference hashes. Optional extra: `pip install "splicetrail[hash]"`.
 - `python -m splicetrail.bench.hash_robustness`: how far the hashes move under resizing, JPEG 70, a colour grade and a 5% crop on the benchmark photos, and how close unrelated photos come. On these 13 photos pHash's edited copies stay within 2 bits and unrelated photos are at least 20 apart; PDQ stays within its published 31 except on the brick texture halved in size (58). Numbers in the README.
 - Optional PhotoDNA lookups (`splicetrail.photodna`, `--algorithm photodna`) for PhotoDNA licensees with a Cloud Service key in `SPLICETRAIL_PHOTODNA_KEY`. The image is sent to Microsoft, only when `photodna` is named. Tested against a mocked service only.
 - `splicetrail.hashing` takes uint8, uint16, other integer, bool and float arrays without stretching them: floats are read as 0..1 or 0..255, uint16 as 0..65535, and anything outside those ranges is refused. Stretching would let a dark frame pass PDQ's quality check. `splicetrail hash --json` names the field `hash`, as `/hash` and the report do, and replaces the output file only once the new one is fully written.
@@ -151,7 +189,7 @@ This release reworks the matching pipeline. On the synthetic benchmark
 - `HybridIndex` combining LSH + FAISS for optimal speed/accuracy tradeoff
 - FastAPI endpoints with Pydantic models for type safety
 
-## [0.1.0] - Unreleased
+## [0.1.0]
 
 ### Added
 - Core patch extraction with entropy-based filtering

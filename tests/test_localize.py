@@ -13,14 +13,16 @@ from splicetrail.aggregation.localize import (
 
 
 def _m(x, y, ps=3):
-    return Match(source_coord=(x, y), target_coord=(0, 0), patch_size=ps, probability=0.9)
+    return Match(
+        source_coord=(x, y), target_coord=(0, 0), patch_size=ps, probability=0.9
+    )
 
 
 class TestLargestConnectedComponent:
     def test_keeps_only_biggest(self):
         mask = np.zeros((20, 20), dtype=bool)
-        mask[2:10, 2:10] = True       # big blob (64 px)
-        mask[15, 15] = True           # scattered speck
+        mask[2:10, 2:10] = True  # big blob (64 px)
+        mask[15, 15] = True  # scattered speck
         out = largest_connected_component(mask)
         assert out[2:10, 2:10].all()
         assert not out[15, 15]
@@ -48,7 +50,7 @@ class TestLocalize:
         full = localize(matches, (24, 24), largest_component=False)
         filtered = localize(matches, (24, 24), largest_component=True)
         assert filtered.sum() < full.sum()
-        assert not filtered[18:21, 18:21].any()   # stray removed
+        assert not filtered[18:21, 18:21].any()  # stray removed
 
     def test_mask_to_bbox(self):
         mask = np.zeros((10, 10), dtype=bool)
@@ -70,7 +72,10 @@ class TestLocalizeRegion:
     def test_more_matches_higher_score(self):
         small = [_m(x, y) for x in range(2, 5) for y in range(2, 5)]
         large = [_m(x, y) for x in range(2, 14) for y in range(2, 14)]
-        assert localize_region(large, (24, 24)).area_fraction > localize_region(small, (24, 24)).area_fraction
+        assert (
+            localize_region(large, (24, 24)).area_fraction
+            > localize_region(small, (24, 24)).area_fraction
+        )
 
     def test_empty_matches_zero_score(self):
         loc = localize_region([], (16, 16))

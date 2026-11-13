@@ -26,14 +26,21 @@ class SpliceSample:
     Real datasets only know the images and the mask; ``bbox`` and the color
     transform are filled in when we generated the splice ourselves.
     """
-    donor: np.ndarray          # reference image (uint8 HxWx3), source of the fragment
-    tampered: np.ndarray       # host image with the recolored fragment spliced in
-    mask: np.ndarray           # bool HxW ground-truth mask (True = spliced pixels) in tampered coords
-    bbox: Optional[Tuple[int, int, int, int]] = None   # (x, y, w, h) of the splice in tampered
-    color_M: Optional[np.ndarray] = None   # applied 3x3 color matrix (target = M @ source + b)
-    color_b: Optional[np.ndarray] = None   # applied bias (in [0,1] scale)
-    params: dict = field(default_factory=dict)   # generation parameters / provenance
-    label: int = 1             # 1 = tampered contains a region from donor, 0 = unrelated pair
+
+    donor: Optional[np.ndarray]  # reference image (uint8 HxWx3), source of the fragment
+    tampered: np.ndarray  # host image with the recolored fragment spliced in
+    mask: (
+        np.ndarray
+    )  # bool HxW ground-truth mask (True = spliced pixels) in tampered coords
+    bbox: Optional[Tuple[int, int, int, int]] = (
+        None  # (x, y, w, h) of the splice in tampered
+    )
+    color_M: Optional[np.ndarray] = (
+        None  # applied 3x3 color matrix (target = M @ source + b)
+    )
+    color_b: Optional[np.ndarray] = None  # applied bias (in [0,1] scale)
+    params: dict = field(default_factory=dict)  # generation parameters / provenance
+    label: int = 1  # 1 = tampered contains a region from donor, 0 = unrelated pair
 
 
 def _textured_image(rng: np.random.RandomState, h: int, w: int) -> np.ndarray:
@@ -67,8 +74,8 @@ def _textured_image(rng: np.random.RandomState, h: int, w: int) -> np.ndarray:
     # Per-channel contrast stretch to [0, 1].
     for c in range(3):
         ch = img[:, :, c]
-        lo, hi = ch.min(), ch.max()
-        img[:, :, c] = (ch - lo) / max(hi - lo, 1e-6)
+        lo, hi = np.min(ch), np.max(ch)
+        img[:, :, c] = (ch - lo) / np.maximum(hi - lo, 1e-6)
     return (img * 255).astype(np.uint8)
 
 
@@ -84,11 +91,13 @@ def _random_color_transform(
     return M, b
 
 
-def _apply_color_transform(region01: np.ndarray, M: np.ndarray, b: np.ndarray) -> np.ndarray:
+def _apply_color_transform(
+    region01: np.ndarray, M: np.ndarray, b: np.ndarray
+) -> np.ndarray:
     """Apply target = M @ source + b in [0,1] space, clipped."""
     flat = region01.reshape(-1, 3)
     out = flat @ M.T + b
-    return np.clip(out, 0.0, 1.0).reshape(region01.shape)
+    return np.asarray(np.clip(out, 0.0, 1.0).reshape(region01.shape))
 
 
 def _random_tone_curve(rng: np.random.RandomState, strength: float) -> np.ndarray:
@@ -96,11 +105,11 @@ def _random_tone_curve(rng: np.random.RandomState, strength: float) -> np.ndarra
 
     Stands in for Curves / gamma edits. strength 0.4 means gammas in about [0.67, 1.5].
     """
-    return np.exp(strength * rng.uniform(-1.0, 1.0, size=3))
+    return np.asarray(np.exp(strength * rng.uniform(-1.0, 1.0, size=3)))
 
 
 def _apply_tone_curve(region01: np.ndarray, gammas: np.ndarray) -> np.ndarray:
-    return np.clip(region01, 0.0, 1.0) ** gammas
+    return np.asarray(np.clip(region01, 0.0, 1.0) ** gammas)
 
 
 def _jpeg_roundtrip(image_u8: np.ndarray, quality: int) -> np.ndarray:
@@ -146,19 +155,23 @@ def make_recolored_splice(
     # Source region within the donor
     fx = rng.randint(0, image_size - fs + 1)
     fy = rng.randint(0, image_size - fs + 1)
-    region01 = donor[fy:fy + fs, fx:fx + fs, :].astype(np.float32) / 255.0
+    region01 = donor[fy : fy + fs, fx : fx + fs, :].astype(np.float32) / 255.0
 
     M, b = _random_color_transform(rng, color_grade_strength)
     recolored = _apply_color_transform(region01, M, b)
     if tone_curve_strength > 0:
-        recolored = _apply_tone_curve(recolored, _random_tone_curve(rng, tone_curve_strength))
+        recolored = _apply_tone_curve(
+            recolored, _random_tone_curve(rng, tone_curve_strength)
+        )
     recolored_u8 = (recolored * 255).astype(np.uint8)
 
     if splice_upscale > 1.0:
         small = max(2, int(round(fs / splice_upscale)))
         img = Image.fromarray(recolored_u8)
         recolored_u8 = np.asarray(
-            img.resize((small, small), Image.LANCZOS).resize((fs, fs), Image.BICUBIC)
+            img.resize((small, small), Image.Resampling.LANCZOS).resize(
+                (fs, fs), Image.Resampling.BICUBIC
+            )
         )
 
     # Paste location within the host
@@ -166,13 +179,13 @@ def make_recolored_splice(
     ly = rng.randint(0, image_size - fs + 1)
 
     tampered = host.copy()
-    tampered[ly:ly + fs, lx:lx + fs, :] = recolored_u8
+    tampered[ly : ly + fs, lx : lx + fs, :] = recolored_u8
 
     if jpeg_quality is not None:
         tampered = _jpeg_roundtrip(tampered, jpeg_quality)
 
     mask = np.zeros((image_size, image_size), dtype=bool)
-    mask[ly:ly + fs, lx:lx + fs] = True
+    mask[ly : ly + fs, lx : lx + fs] = True
 
     return SpliceSample(
         donor=donor,
@@ -237,16 +250,18 @@ def make_copy_move(
         sx, sy, dx, dy = rng.randint(0, image_size - fs + 1, size=4)
         if abs(int(sx) - int(dx)) >= fs or abs(int(sy) - int(dy)) >= fs:
             break
-    region01 = image[sy:sy + fs, sx:sx + fs].astype(np.float32) / 255.0
+    region01 = image[sy : sy + fs, sx : sx + fs].astype(np.float32) / 255.0
     M, b = _random_color_transform(rng, color_grade_strength)
     tampered = image.copy()
-    tampered[dy:dy + fs, dx:dx + fs] = (_apply_color_transform(region01, M, b) * 255).astype(np.uint8)
+    tampered[dy : dy + fs, dx : dx + fs] = (
+        _apply_color_transform(region01, M, b) * 255
+    ).astype(np.uint8)
     if jpeg_quality is not None:
         tampered = _jpeg_roundtrip(tampered, jpeg_quality)
 
     mask = np.zeros((image_size, image_size), dtype=bool)
-    mask[sy:sy + fs, sx:sx + fs] = True
-    mask[dy:dy + fs, dx:dx + fs] = True
+    mask[sy : sy + fs, sx : sx + fs] = True
+    mask[dy : dy + fs, dx : dx + fs] = True
     return SpliceSample(
         donor=None,
         tampered=tampered,
@@ -254,6 +269,11 @@ def make_copy_move(
         bbox=(int(dx), int(dy), fs, fs),
         color_M=M,
         color_b=b,
-        params={"seed": seed, "copy_move": True, "source_region": (int(sx), int(sy), fs, fs),
-                "jpeg_quality": jpeg_quality, "color_grade_strength": color_grade_strength},
+        params={
+            "seed": seed,
+            "copy_move": True,
+            "source_region": (int(sx), int(sy), fs, fs),
+            "jpeg_quality": jpeg_quality,
+            "color_grade_strength": color_grade_strength,
+        },
     )

@@ -30,7 +30,7 @@ from urllib.parse import urlsplit
 try:
     import requests
 except ImportError:  # only needed once a client is made; see PhotoDnaClient
-    requests = None
+    requests = None  # type: ignore[assignment]  # optional extra, checked at use
 
 __all__ = ["PhotoDnaClient", "PhotoDnaError"]
 
@@ -56,23 +56,31 @@ def _check_endpoint(endpoint: str) -> None:
     except ValueError:
         raise PhotoDnaError("The PhotoDNA endpoint isn't a valid URL") from None
     if parts.username is not None or parts.password is not None or "@" in parts.netloc:
-        raise PhotoDnaError("The PhotoDNA endpoint must not contain a user name or password")
+        raise PhotoDnaError(
+            "The PhotoDNA endpoint must not contain a user name or password"
+        )
     if parts.scheme == "https" and host:
         return
     if parts.scheme == "http" and host in _LOCAL_HOSTS:
         return
-    raise PhotoDnaError("The PhotoDNA endpoint must be an https:// URL "
-                        "(plain http is only allowed for localhost)")
+    raise PhotoDnaError(
+        "The PhotoDNA endpoint must be an https:// URL "
+        "(plain http is only allowed for localhost)"
+    )
 
 
 class PhotoDnaClient:
     """Sends images to the PhotoDNA Cloud Service Match call."""
 
-    def __init__(self, key: Optional[str] = None, endpoint: Optional[str] = None,
-                 timeout: float = 30.0):
+    def __init__(
+        self,
+        key: Optional[str] = None,
+        endpoint: Optional[str] = None,
+        timeout: float = 30.0,
+    ):
         if requests is None:
             raise PhotoDnaError(
-                "PhotoDNA needs the requests package: pip install splicetrail[hash]"
+                'PhotoDNA needs the requests package: pip install "splicetrail[hash]"'
             )
         key = key or os.environ.get("SPLICETRAIL_PHOTODNA_KEY")
         if not key:
@@ -81,7 +89,11 @@ class PhotoDnaClient:
                 f"Microsoft takes applications at {APPLY_URL}. Once you have a key, "
                 "set it in the SPLICETRAIL_PHOTODNA_KEY environment variable."
             )
-        endpoint = endpoint or os.environ.get("SPLICETRAIL_PHOTODNA_ENDPOINT") or DEFAULT_ENDPOINT
+        endpoint = (
+            endpoint
+            or os.environ.get("SPLICETRAIL_PHOTODNA_ENDPOINT")
+            or DEFAULT_ENDPOINT
+        )
         _check_endpoint(endpoint)
         self._key = key
         self.endpoint = endpoint
@@ -92,19 +104,30 @@ class PhotoDnaClient:
 
     def match(self, image_bytes: bytes) -> dict:
         """Ask the service about an image; returns its JSON verdict as-is."""
-        body = {"DataRepresentation": "inline",
-                "Value": base64.b64encode(image_bytes).decode("ascii")}
+        body = {
+            "DataRepresentation": "inline",
+            "Value": base64.b64encode(image_bytes).decode("ascii"),
+        }
         try:
             # The exceptions requests raises can echo request details, so only
             # their type is reported, never their text.
-            r = requests.post(self.endpoint, headers={KEY_HEADER: self._key},
-                              json=body, timeout=self.timeout, allow_redirects=False)
+            r = requests.post(
+                self.endpoint,
+                headers={KEY_HEADER: self._key},
+                json=body,
+                timeout=self.timeout,
+                allow_redirects=False,
+            )
         except requests.Timeout:
             log.warning("PhotoDNA request timed out after %ss", self.timeout)
-            raise PhotoDnaError(f"PhotoDNA service didn't answer within {self.timeout:g} seconds") from None
+            raise PhotoDnaError(
+                f"PhotoDNA service didn't answer within {self.timeout:g} seconds"
+            ) from None
         except requests.RequestException as e:
             log.warning("PhotoDNA request failed (%s)", type(e).__name__)
-            raise PhotoDnaError(f"Couldn't reach the PhotoDNA service ({type(e).__name__})") from None
+            raise PhotoDnaError(
+                f"Couldn't reach the PhotoDNA service ({type(e).__name__})"
+            ) from None
 
         status = r.status_code
         try:
@@ -114,14 +137,20 @@ class PhotoDnaClient:
         if 300 <= status < 400:
             # Following a redirect could forward the key and image to another host.
             log.warning("PhotoDNA service returned a redirect (HTTP %s)", status)
-            raise PhotoDnaError(f"PhotoDNA service answered with a redirect (HTTP {status}); "
-                                "check the endpoint") from None
+            raise PhotoDnaError(
+                f"PhotoDNA service answered with a redirect (HTTP {status}); "
+                "check the endpoint"
+            ) from None
         if status >= 400:
             log.warning("PhotoDNA service returned HTTP %s", status)
             hint = " (check the subscription key)" if status in (401, 403) else ""
-            raise PhotoDnaError(f"PhotoDNA service returned HTTP {status}{hint}") from None
+            raise PhotoDnaError(
+                f"PhotoDNA service returned HTTP {status}{hint}"
+            ) from None
         if not isinstance(verdict, dict):
             log.warning("PhotoDNA service returned something that isn't JSON")
-            raise PhotoDnaError("PhotoDNA service returned a response that isn't JSON "
-                                "(an error page, perhaps); check the endpoint") from None
+            raise PhotoDnaError(
+                "PhotoDNA service returned a response that isn't JSON "
+                "(an error page, perhaps); check the endpoint"
+            ) from None
         return verdict

@@ -1,9 +1,11 @@
 """Tests for the provenance graph."""
 
-import numpy as np
-
 from splicetrail import ForensicsEngine
-from splicetrail.bench.synthetic import make_copy_move, make_negative_pair, make_recolored_splice
+from splicetrail.bench.synthetic import (
+    make_copy_move,
+    make_negative_pair,
+    make_recolored_splice,
+)
 from splicetrail.provenance import build_provenance, to_dict, to_dot
 
 
@@ -18,11 +20,13 @@ def test_links_shared_regions_and_copy_moves():
     engine = ForensicsEngine()
     for name, image in images.items():
         engine.index_target(image, name)
-    links = build_provenance(engine, {k: (v, 0.0) for k, v in images.items()}, copy_moves=True)
+    links = build_provenance(
+        engine, {k: (v, 0.0) for k, v in images.items()}, copy_moves=True
+    )
 
     pairs = {frozenset((link.a, link.b)) for link in links}
     assert frozenset(("donor", "edited")) in pairs
-    assert frozenset(("cm",)) in pairs                      # duplicated within itself
+    assert frozenset(("cm",)) in pairs  # duplicated within itself
     assert not any("unrelated" in p for p in pairs)
     assert links == sorted(links, key=lambda link: link.log10_nfa)
 

@@ -24,7 +24,10 @@ def _png_data_uri(image: np.ndarray) -> str:
     img = Image.fromarray(np.asarray(image))
     scale = min(1.0, _MAX_SIDE / max(img.size))
     if scale < 1.0:
-        img = img.resize((max(1, int(img.width * scale)), max(1, int(img.height * scale))), Image.LANCZOS)
+        img = img.resize(
+            (max(1, int(img.width * scale)), max(1, int(img.height * scale))),
+            Image.Resampling.LANCZOS,
+        )
     buf = io.BytesIO()
     img.save(buf, format="PNG")
     return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
@@ -32,7 +35,10 @@ def _png_data_uri(image: np.ndarray) -> str:
 
 def _heatmap_rgb(heatmap: np.ndarray) -> np.ndarray:
     h = np.clip(heatmap, 0, 1)
-    rgb = np.stack([np.clip(h * 3, 0, 1), np.clip(h * 3 - 1, 0, 1), np.clip(h * 3 - 2, 0, 1)], axis=-1)
+    rgb = np.stack(
+        [np.clip(h * 3, 0, 1), np.clip(h * 3 - 1, 0, 1), np.clip(h * 3 - 2, 0, 1)],
+        axis=-1,
+    )
     return (rgb * 255).astype(np.uint8)
 
 
@@ -104,14 +110,17 @@ def render_html(
     if target_image is not None:
         figures.append(_figure(target_image, tgt_boxes, "Reference image (target)"))
     if heatmap is not None:
-        figures.append(_figure(_heatmap_rgb(heatmap), [], "Match density on the reference image"))
+        figures.append(
+            _figure(_heatmap_rgb(heatmap), [], "Match density on the reference image")
+        )
 
     table = (
         "<table><thead><tr><th>#</th><th>In questioned image (x, y &middot; size)</th>"
         "<th>In reference image</th><th>Agreeing patches</th><th>Expected by chance</th>"
         "<th>Color change (reference = M &middot; questioned + b)</th></tr></thead>"
         f"<tbody>{''.join(rows)}</tbody></table>"
-        if rows else ""
+        if rows
+        else ""
     )
 
     cues = report.get("cues") or {}
@@ -128,7 +137,8 @@ def render_html(
     meta_rows = "".join(
         f"<tr><th>{html.escape(name)}</th><td>{html.escape(str(meta['path'])) if meta.get('path') else '&ndash;'}</td>"
         f"<td class='mono'>{html.escape(str(meta.get('sha256') or ''))}</td></tr>"
-        for name, meta in inputs.items() if meta
+        for name, meta in inputs.items()
+        if meta
     )
     config = ", ".join(f"{k}={v}" for k, v in (report.get("config") or {}).items())
     tool = report.get("tool", {})

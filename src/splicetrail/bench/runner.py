@@ -7,6 +7,8 @@ Usage:
     python -m splicetrail.bench.runner --n 40 --grade 0.15
     python -m splicetrail.bench.runner --dataset photos --n 60 --negatives 60 --calibrate
     python -m splicetrail.bench.runner --dataset casia2 --n 300 --negatives 300 --calibrate --json out.json
+    python -m splicetrail.bench.runner --dataset casia2 --n 40 --negatives 40 --query-scales 1.0 0.75 0.5
+    python -m splicetrail.bench.runner --dataset photos --n 20 --negatives 20 --thorough
 """
 
 from __future__ import annotations
@@ -14,7 +16,7 @@ from __future__ import annotations
 import argparse
 import json
 import time
-from typing import Dict, List, Sequence
+from typing import Dict, List, Optional, Sequence
 
 from splicetrail.bench import calibration
 from splicetrail.bench.baselines import Detector, RootSiftRansacDetector
@@ -42,7 +44,10 @@ def build_samples(
         )
         for i in range(n)
     ]
-    negs = [make_negative_pair(seed=10_000 + i, image_size=image_size) for i in range(negatives)]
+    negs = [
+        make_negative_pair(seed=10_000 + i, image_size=image_size)
+        for i in range(negatives)
+    ]
     return positives, negs
 
 
@@ -66,7 +71,9 @@ def evaluate(detector: Detector, positives: Sequence, negatives: Sequence) -> Di
 
     n_imgs = len(positives) + len(negatives)
     out = aggregate(loc_scores)
-    out["det_auc"] = detection_auc(det_scores, det_labels) if negatives else float("nan")
+    out["det_auc"] = (
+        detection_auc(det_scores, det_labels) if negatives else float("nan")
+    )
     out["sec_per_image"] = elapsed / max(n_imgs, 1)
     return out
 
@@ -78,7 +85,7 @@ def run(
     color_grade_strength: float = 0.15,
     jpeg_quality=None,
     negatives: int = 0,
-    detectors: Sequence[Detector] = None,
+    detectors: Optional[Sequence[Detector]] = None,
 ) -> Dict[str, Dict]:
     """Synthetic benchmark across detectors (SpliceTrail + RootSIFT by default)."""
     from splicetrail.bench.baselines import SpliceTrailDetector
@@ -94,10 +101,14 @@ def run(
 def _format_table(results: Dict[str, Dict]) -> str:
     cols = ["iou", "f1", "precision", "recall", "mcc", "det_auc", "sec_per_image"]
     width = max(len(n) for n in results) + 2
-    header = "detector".ljust(width) + "".join(c.rjust(13) for c in cols)
+    # Wider than the longest column name, so neighbouring names never touch.
+    col = max(len(c) for c in cols) + 2
+    header = "detector".ljust(width) + "".join(c.rjust(col) for c in cols)
     lines = [header, "-" * len(header)]
     for name, r in results.items():
-        row = name.ljust(width) + "".join(f"{r.get(c, float('nan')):13.4f}" for c in cols)
+        row = name.ljust(width) + "".join(
+            f"{r.get(c, float('nan')):{col}.4f}" for c in cols
+        )
         lines.append(row)
     return "\n".join(lines)
 
@@ -105,63 +116,183 @@ def _format_table(results: Dict[str, Dict]) -> str:
 def _dataset_kwargs(args) -> Dict:
     copy_move = args.task == "copymove"
     if args.dataset == "synthetic":
-        return dict(n=args.n, negatives=args.negatives, image_size=args.image_size,
-                    fragment_size=args.fragment_size, color_grade_strength=args.grade,
-                    jpeg_quality=args.jpeg, seed=args.seed, tone_curve_strength=args.curve,
-                    copy_move=copy_move)
+        return dict(
+            n=args.n,
+            negatives=args.negatives,
+            image_size=args.image_size,
+            fragment_size=args.fragment_size,
+            color_grade_strength=args.grade,
+            jpeg_quality=args.jpeg,
+            seed=args.seed,
+            tone_curve_strength=args.curve,
+            copy_move=copy_move,
+        )
     if args.dataset == "photos":
         geometry = dict(rotation=args.rotation, flip=args.flip)
         if copy_move:
-            return dict(n=args.n, negatives=args.negatives, color_grade_strength=args.grade,
-                        jpeg_quality=args.jpeg, seed=args.seed, copy_move=True, **geometry)
-        return dict(n=args.n, negatives=args.negatives, color_grade_strength=args.grade,
-                    jpeg_quality=args.jpeg, seed=args.seed, tone_curve_strength=args.curve, **geometry)
+            return dict(
+                n=args.n,
+                negatives=args.negatives,
+                color_grade_strength=args.grade,
+                jpeg_quality=args.jpeg,
+                seed=args.seed,
+                copy_move=True,
+                **geometry,
+            )
+        return dict(
+            n=args.n,
+            negatives=args.negatives,
+            color_grade_strength=args.grade,
+            jpeg_quality=args.jpeg,
+            seed=args.seed,
+            tone_curve_strength=args.curve,
+            **geometry,
+        )
     if args.dataset == "coverage":  # copy-move by nature
         return dict(root=args.root, n=args.n, negatives=args.negatives, seed=args.seed)
     if args.dataset == "comofod":
-        return dict(root=args.root, n=args.n, negatives=args.negatives, seed=args.seed, category=args.category)
+        return dict(
+            root=args.root,
+            n=args.n,
+            negatives=args.negatives,
+            seed=args.seed,
+            category=args.category,
+        )
     if args.dataset == "casia2":
-        return dict(root=args.root, n=args.n, negatives=args.negatives, seed=args.seed, copy_move=copy_move)
+        return dict(
+            root=args.root,
+            n=args.n,
+            negatives=args.negatives,
+            seed=args.seed,
+            copy_move=copy_move,
+        )
     return dict(path=args.root)
 
 
+def _engine_config(args):
+    """The engine settings the command line asks for (defaults otherwise)."""
+    from splicetrail.engine import Config
+
+    kwargs: Dict = {}
+    if args.thorough:
+        kwargs["thorough"] = True
+    if args.query_scales:
+        kwargs["query_scales"] = list(args.query_scales)
+    return Config(**kwargs)
+
+
 def main(argv=None):
-    p = argparse.ArgumentParser(description="SpliceTrail benchmark runner")
-    p.add_argument("--dataset", default="synthetic", choices=["synthetic", "photos", "casia2", "coverage", "comofod", "manifest"])
-    p.add_argument("--task", default="splice", choices=["splice", "copymove"],
-                   help="splice: donor image given; copymove: find duplicates within one image")
-    p.add_argument("--root", default=None, help="dataset folder (casia2, coverage, comofod) or manifest CSV path")
-    p.add_argument("--category", default=None,
-                   choices=["translation", "rotation", "scaling"],
-                   help="comofod only: one kind of copy-move")
-    p.add_argument("--n", type=int, default=40, help="number of positive (spliced) samples")
-    p.add_argument("--negatives", type=int, default=20, help="number of negative (unrelated) pairs")
+    p = argparse.ArgumentParser(
+        prog="python -m splicetrail.bench.runner",
+        description="SpliceTrail benchmark runner",
+    )
+    p.add_argument(
+        "--dataset",
+        default="synthetic",
+        choices=["synthetic", "photos", "casia2", "coverage", "comofod", "manifest"],
+    )
+    p.add_argument(
+        "--task",
+        default="splice",
+        choices=["splice", "copymove"],
+        help="splice: donor image given; copymove: find duplicates within one image",
+    )
+    p.add_argument(
+        "--root",
+        default=None,
+        help="dataset folder (casia2, coverage, comofod) or manifest CSV path",
+    )
+    p.add_argument(
+        "--category",
+        default=None,
+        choices=["translation", "rotation", "scaling"],
+        help="comofod only: one kind of copy-move",
+    )
+    p.add_argument(
+        "--n", type=int, default=40, help="number of positive (spliced) samples"
+    )
+    p.add_argument(
+        "--negatives", type=int, default=20, help="number of negative (unrelated) pairs"
+    )
     p.add_argument("--image-size", type=int, default=96, help="synthetic only")
     p.add_argument("--fragment-size", type=int, default=24, help="synthetic only")
-    p.add_argument("--grade", type=float, default=0.15, help="color-grade strength (generated datasets)")
-    p.add_argument("--jpeg", type=int, default=None, help="JPEG quality for the tampered image (generated datasets)")
-    p.add_argument("--curve", type=float, default=0.0, help="tone-curve (per-channel gamma) strength (generated datasets)")
-    p.add_argument("--rotation", type=float, default=0.0, help="max rotation of the copied fragment, degrees (photos)")
-    p.add_argument("--flip", action="store_true", help="mirror half the copied fragments (photos)")
+    p.add_argument(
+        "--grade",
+        type=float,
+        default=0.15,
+        help="color-grade strength (generated datasets)",
+    )
+    p.add_argument(
+        "--jpeg",
+        type=int,
+        default=None,
+        help="JPEG quality for the tampered image (generated datasets)",
+    )
+    p.add_argument(
+        "--curve",
+        type=float,
+        default=0.0,
+        help="tone-curve (per-channel gamma) strength (generated datasets)",
+    )
+    p.add_argument(
+        "--rotation",
+        type=float,
+        default=0.0,
+        help="max rotation of the copied fragment, degrees (photos)",
+    )
+    p.add_argument(
+        "--flip", action="store_true", help="mirror half the copied fragments (photos)"
+    )
     p.add_argument("--seed", type=int, default=0)
-    p.add_argument("--calibrate", action="store_true", help="also report false regions per pair vs NFA threshold")
-    p.add_argument("--no-baselines", action="store_true", help="skip the RootSIFT baseline")
+    p.add_argument(
+        "--query-scales",
+        type=float,
+        nargs="+",
+        default=None,
+        metavar="SCALE",
+        help="also search the questioned image at these scales, e.g. 1.0 0.75 0.5 "
+        "(Config.query_scales; for copies enlarged before pasting)",
+    )
+    p.add_argument(
+        "--thorough",
+        action="store_true",
+        help="Config(thorough=True): also mirrored, enlarged and rotated copies",
+    )
+    p.add_argument(
+        "--calibrate",
+        action="store_true",
+        help="also report false regions per pair vs NFA threshold",
+    )
+    p.add_argument(
+        "--no-baselines", action="store_true", help="skip the RootSIFT baseline"
+    )
     p.add_argument("--json", default=None, help="write all numbers to this file")
     args = p.parse_args(argv)
+    try:
+        config = _engine_config(args)
+    except ValueError as e:  # ConfigurationError, e.g. a query scale above 1
+        p.error(str(e))
 
     samples = load(args.dataset, **_dataset_kwargs(args))
     if not samples:
         raise SystemExit(f"no samples loaded from {args.dataset}")
     positives, negatives = split_labels(samples)
 
-    records = calibration.score_samples(samples, progress=True)
+    records = calibration.score_samples(samples, config=config, progress=True)
     results = {"splicetrail": calibration.summary(records)}
-    if not args.no_baselines and all(s.donor is not None for s in samples):  # the baselines need a donor
-        results["rootsift+ransac"] = evaluate(RootSiftRansacDetector(), positives, negatives)
+    if not args.no_baselines and all(
+        s.donor is not None for s in samples
+    ):  # the baselines need a donor
+        results["rootsift+ransac"] = evaluate(
+            RootSiftRansacDetector(), positives, negatives
+        )
 
     task = "copymove" if all(x.donor is None for x in samples) else "splice"
-    print(f"\nSpliceTrail benchmark | {args.dataset} {task} | {len(positives)} pos + {len(negatives)} neg | "
-          f"grade={args.grade} jpeg={args.jpeg}\n")
+    print(
+        f"\nSpliceTrail benchmark | {args.dataset} {task} | {len(positives)} pos + {len(negatives)} neg | "
+        f"grade={args.grade} jpeg={args.jpeg} thorough={args.thorough} "
+        f"query_scales={config.query_scales}\n"
+    )
     print(_format_table(results))
 
     report = {"dataset": args.dataset, "args": vars(args), "results": results}

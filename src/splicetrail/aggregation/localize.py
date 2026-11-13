@@ -21,7 +21,7 @@ def match_footprint_mask(matches: Sequence, shape: Tuple[int, int]) -> np.ndarra
     for m in matches:
         x, y = int(m.source_coord[0]), int(m.source_coord[1])
         ps = int(round(m.patch_size / getattr(m, "source_scale", 1.0)))
-        mask[max(0, y):min(h, y + ps), max(0, x):min(w, x + ps)] = True
+        mask[max(0, y) : min(h, y + ps), max(0, x) : min(w, x + ps)] = True
     return mask
 
 
@@ -36,8 +36,8 @@ def largest_connected_component(mask: np.ndarray) -> np.ndarray:
     # Bincount over labels (skip background label 0) and keep the biggest.
     counts = np.bincount(labeled.ravel())
     counts[0] = 0
-    keep = int(counts.argmax())
-    return labeled == keep
+    keep = int(np.argmax(counts))
+    return np.asarray(labeled == keep)
 
 
 def localize(
@@ -71,10 +71,11 @@ def mask_to_bbox(mask: np.ndarray) -> Tuple[int, int, int, int]:
 @dataclass
 class Localization:
     """Predicted localization mask and how much of the image it covers."""
-    mask: np.ndarray                       # bool (H, W) predicted splice mask
-    bbox: Tuple[int, int, int, int]        # (x, y, w, h) of the mask
-    area: int                              # mask pixel count
-    area_fraction: float                   # area / (H * W), in [0, 1]
+
+    mask: np.ndarray  # bool (H, W) predicted splice mask
+    bbox: Tuple[int, int, int, int]  # (x, y, w, h) of the mask
+    area: int  # mask pixel count
+    area_fraction: float  # area / (H * W), in [0, 1]
 
 
 def localize_region(
@@ -87,4 +88,6 @@ def localize_region(
     area = int(mask.sum())
     h, w = shape
     fraction = area / float(h * w) if h * w else 0.0
-    return Localization(mask=mask, bbox=mask_to_bbox(mask), area=area, area_fraction=fraction)
+    return Localization(
+        mask=mask, bbox=mask_to_bbox(mask), area=area, area_fraction=fraction
+    )

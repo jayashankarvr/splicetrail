@@ -23,27 +23,31 @@ import numpy as np
 from PIL import Image
 
 from splicetrail.bench.datasets import load_photos
-from splicetrail.bench.synthetic import _apply_color_transform, _jpeg_roundtrip, _random_color_transform
+from splicetrail.bench.synthetic import (
+    _apply_color_transform,
+    _jpeg_roundtrip,
+    _random_color_transform,
+)
 from splicetrail.hashing import DEFAULT_DISTANCE, hamming, hash_image
 
 
 def _resize(img: np.ndarray, factor: float) -> np.ndarray:
     h, w = img.shape[:2]
     size = (max(1, round(w * factor)), max(1, round(h * factor)))
-    return np.asarray(Image.fromarray(img).resize(size, Image.BICUBIC))
+    return np.asarray(Image.fromarray(img).resize(size, Image.Resampling.BICUBIC))
 
 
 def _grade(img: np.ndarray, strength: float = 0.15, seed: int = 0) -> np.ndarray:
     M, b = _random_color_transform(np.random.RandomState(seed), strength)
     out = _apply_color_transform(img.astype(np.float64) / 255.0, M, b)
-    return np.round(out * 255.0).astype(np.uint8)
+    return np.asarray(np.round(out * 255.0).astype(np.uint8))
 
 
 def _crop(img: np.ndarray, fraction: float = 0.05) -> np.ndarray:
     """Keep the centre, trimming ``fraction`` of each dimension (half from each side)."""
     h, w = img.shape[:2]
     dy, dx = round(h * fraction / 2), round(w * fraction / 2)
-    return img[dy:h - dy, dx:w - dx]
+    return img[dy : h - dy, dx : w - dx]
 
 
 # The edits the matching thresholds are meant to survive, plus the crop, which
@@ -76,7 +80,9 @@ def measure_pairs(
         originals[name] = {h.algorithm: h.hex for h in hash_image(img, algorithms)}
         for edit, fn in EDITS.items():
             for h in hash_image(fn(img), algorithms):
-                edited[(h.algorithm, name, edit)] = hamming(originals[name][h.algorithm], h.hex)
+                edited[(h.algorithm, name, edit)] = hamming(
+                    originals[name][h.algorithm], h.hex
+                )
     unrelated = {
         (algo, a, b): hamming(originals[a][algo], originals[b][algo])
         for algo in algorithms
@@ -112,7 +118,10 @@ def format_table(worst, closest) -> str:
     rows.append(["DEFAULT_DISTANCE", *(str(DEFAULT_DISTANCE[a]) for a in algos)])
     widths = [max(len(r[i]) for r in rows) for i in range(len(rows[0]))]
     lines = [
-        "  ".join(c.ljust(w) if i == 0 else c.rjust(w) for i, (c, w) in enumerate(zip(r, widths)))
+        "  ".join(
+            c.ljust(w) if i == 0 else c.rjust(w)
+            for i, (c, w) in enumerate(zip(r, widths))
+        )
         for r in rows
     ]
     lines.append("")
@@ -126,9 +135,16 @@ def format_table(worst, closest) -> str:
 
 
 def main(argv=None) -> None:
-    p = argparse.ArgumentParser(description="Perceptual hash distances on the scikit-image photos")
-    p.add_argument("--algorithm", action="append", choices=("pdq", "phash", "phash-lib"),
-                   help="repeatable; default pdq and phash")
+    p = argparse.ArgumentParser(
+        prog="python -m splicetrail.bench.hash_robustness",
+        description="Perceptual hash distances on the scikit-image photos",
+    )
+    p.add_argument(
+        "--algorithm",
+        action="append",
+        choices=("pdq", "phash", "phash-lib"),
+        help="repeatable; default pdq and phash",
+    )
     args = p.parse_args(argv)
     worst, closest = summarize(*measure_pairs(args.algorithm or ("pdq", "phash")))
     print(format_table(worst, closest))

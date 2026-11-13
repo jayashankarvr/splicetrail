@@ -5,7 +5,11 @@ import json
 import numpy as np
 import pytest
 
-from splicetrail.exceptions import IndexCorruptedError, IndexStoreError, TargetExistsError
+from splicetrail.exceptions import (
+    IndexCorruptedError,
+    IndexStoreError,
+    TargetExistsError,
+)
 from splicetrail.search.index import ANNIndex
 
 
@@ -101,14 +105,17 @@ class TestIVFPQ:
         x /= np.linalg.norm(x, axis=1, keepdims=True)
         index = ANNIndex(25, kind="ivfpq", train_size=2000)
         index.add("a", x[:1000])
-        assert not index._trained                      # still the exact buffer
+        assert not index._trained  # still the exact buffer
         index.add("b", x[1000:3000])
-        assert index._trained and index.size == 3000   # trained, nothing lost
+        assert index._trained and index.size == 3000  # trained, nothing lost
 
         # Approximate: the vector's own entry must be among the k candidates
         # the engine goes on to verify, not necessarily first.
         hits = index.search(x[[1500]], k=8)
-        found = {(hits.image_ids[o], int(p)) for o, p in zip(hits.owner[0], hits.patch_idx[0])}
+        found = {
+            (hits.image_ids[o], int(p))
+            for o, p in zip(hits.owner[0], hits.patch_idx[0])
+        }
         assert ("b", 500) in found
 
     def test_remove_and_roundtrip(self, tmp_path):
@@ -123,7 +130,10 @@ class TestIVFPQ:
         loaded = ANNIndex.load(str(tmp_path / "idx"))
         assert loaded.kind == "ivfpq" and loaded._trained and loaded.size == 1000
         hits = loaded.search(x[[1600]], k=8)
-        found = {(hits.image_ids[o], int(p)) for o, p in zip(hits.owner[0], hits.patch_idx[0])}
+        found = {
+            (hits.image_ids[o], int(p))
+            for o, p in zip(hits.owner[0], hits.patch_idx[0])
+        }
         assert ("b", 100) in found and all(name == "b" for name, _ in found)
 
     def test_unknown_kind(self):

@@ -112,3 +112,7 @@ heatmap_*.png
 # OS
 .DS_Store
 Thumbs.db
+.claude/
+
+# Internal planning docs, kept local
+docs/superpowers/
