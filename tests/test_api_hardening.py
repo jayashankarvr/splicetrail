@@ -550,7 +550,9 @@ def test_ready_checks_index_dir(tmp_path, monkeypatch):
 
 
 def _index(client, image_id, image):
-    r = client.post("/index", params={"image_id": image_id}, files={"file": _png(image)})
+    r = client.post(
+        "/index", params={"image_id": image_id}, files={"file": _png(image)}
+    )
     assert r.status_code == 200, r.text
 
 
@@ -617,3 +619,32 @@ def test_missing_target_image_is_reported(sample, tmp_path, monkeypatch, caplog)
     body = client.post("/match", files={"file": _png(sample.tampered)}).json()
     assert not body["detected"]
     assert body["unavailable_targets"] == ["t0"]
+
+
+def test_unwritable_index_dir_stops_startup_with_clear_message(tmp_path, monkeypatch):
+    with mock.patch.object(
+        api.os, "makedirs", side_effect=PermissionError(13, "Permission denied")
+    ):
+        monkeypatch.setenv("SPLICETRAIL_INDEX_DIR", str(tmp_path / "data"))
+        with pytest.raises(ValueError, match="index dir .*Permission denied.*writable"):
+            create_app()
+
+    with mock.patch.object(api.os, "access", return_value=False):
+        monkeypatch.setenv("SPLICETRAIL_INDEX_DIR", str(tmp_path))
+        with pytest.raises(ValueError, match="index dir .*permission denied"):
+            create_app()
+
+
+def test_serve_reports_unwritable_index_dir_without_traceback(tmp_path, monkeypatch):
+    from click.testing import CliRunner
+
+    from splicetrail.cli import cli
+
+    monkeypatch.setenv("SPLICETRAIL_INDEX_DIR", str(tmp_path))
+    monkeypatch.setattr("uvicorn.run", mock.Mock(side_effect=AssertionError("ran")))
+    with mock.patch.object(api.os, "access", return_value=False):
+        result = CliRunner().invoke(cli, ["serve"])
+    assert result.exit_code == 1
+    assert "Can't use index dir" in result.output
+    assert "Traceback" not in result.output
+

@@ -329,7 +329,13 @@ class IndexStore:
     def __init__(self, root: str):
         self.root = os.path.abspath(root)
         self.images = os.path.join(self.root, "images")
-        os.makedirs(self.images, exist_ok=True)
+        try:
+            os.makedirs(self.images, exist_ok=True)
+        except OSError as e:
+            raise ValueError(_unwritable(self.root, e.strerror or str(e))) from e
+        for directory in (self.root, self.images):
+            if not os.access(directory, os.W_OK | os.X_OK):
+                raise ValueError(_unwritable(directory, "permission denied"))
         self._pointer = os.path.join(self.root, "CURRENT")
 
     def _current(self) -> Optional[str]:
@@ -959,6 +965,16 @@ def create_app(
         return {"success": True, "message": f"Removed target {image_id}"}
 
     return app
+
+
+def _unwritable(directory: str, reason: str) -> str:
+    return (
+        f"Can't use index dir {directory} (SPLICETRAIL_INDEX_DIR): {reason}. It "
+        f"must be writable by the server's user (uid {os.getuid()}); create it "
+        f"first or fix its owner."
+        if hasattr(os, "getuid")
+        else f"Can't use index dir {directory} (SPLICETRAIL_INDEX_DIR): {reason}"
+    )
 
 
 def _missing_hash_dependency(names: List[str]) -> str:
