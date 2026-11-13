@@ -252,19 +252,19 @@ curl -X POST "http://localhost:8000/index?image_id=suspect_photo_001" \
 
 List all indexed target images.
 
+Each entry holds only the target's id and its size; server file paths are never returned.
+
 **Response:**
 ```json
 {
   "targets": [
     {
       "image_id": "suspect_photo_001",
-      "shape": {"height": 1024, "width": 768},
-      "path": "/path/to/file.jpg"
+      "shape": {"height": 1024, "width": 768}
     },
     {
       "image_id": "suspect_photo_002",
-      "shape": {"height": 2048, "width": 1536},
-      "path": null
+      "shape": {"height": 2048, "width": 1536}
     }
   ],
   "count": 2
@@ -464,7 +464,9 @@ refused unless the server operator has a PhotoDNA licence and has set
 - `413 Payload Too Large`: File exceeds limits
 - `501 Not Implemented`: The algorithm's library isn't installed on the server
   (the message says how to install it), or the server's PhotoDNA settings are unusable
-- `502 Bad Gateway`: libpHash or the PhotoDNA service failed
+- `502 Bad Gateway`: libpHash or the PhotoDNA service failed. The message is fixed
+  text ending in a request id, which is also sent in the `X-Request-ID` header;
+  operators can find the underlying error by searching the server log for that id
 
 ---
 
