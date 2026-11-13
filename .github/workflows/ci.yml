@@ -11,8 +11,9 @@ jobs:
     # ubuntu-latest (26.04) has no Python 3.9 build; 24.04 still does.
     runs-on: ubuntu-24.04
     strategy:
+      fail-fast: false
       matrix:
-        python-version: ["3.9", "3.10", "3.11", "3.12"]
+        python-version: ["3.9", "3.10", "3.11", "3.12", "3.13"]
 
     steps:
       - uses: actions/checkout@v4
@@ -22,10 +23,13 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      # Every extra installs on 3.9 through 3.13, so the API, hashing and
+      # scikit-image tests run instead of skipping. pdqhash has no wheels and
+      # builds from source with the runner's C++ compiler.
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -e ".[dev]"
+          pip install -e ".[dev,api,hash,bench]"
 
       - name: Run tests
         run: pytest tests/ -v --tb=short
@@ -35,20 +39,55 @@ jobs:
           splicetrail --version
           splicetrail --help
 
+      # mypy 2.x can no longer target 3.9, so the 3.9 entry checks types
+      # against the oldest supported Python with the mypy and numpy it resolves.
+      - name: Type check (Python 3.9 target)
+        if: matrix.python-version == '3.9'
+        run: mypy src/splicetrail
+
   lint:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
+      # Linters are pinned so a new release can't change the verdict on
+      # unchanged code; bump them deliberately.
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install ruff
+          pip install -e ".[dev,api,hash,bench]" "ruff==0.17.5" "black==26.10.1" "mypy==2.4.1"
 
-      - name: Lint with ruff
-        run: ruff check src/
+      - name: Ruff
+        run: ruff check src tests
+
+      - name: Black
+        run: black --check src tests
+
+      - name: Mypy
+        run: mypy src/splicetrail
+
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install build twine
+
+      - name: Build sdist and wheel
+        run: python -m build
+
+      - name: Check distribution metadata
+        run: twine check dist/*
