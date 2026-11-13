@@ -306,7 +306,7 @@ class Config:
     # cropped, recolored, recompressed, shrunk): also mirrored and enlarged
     # copies, and a second, rotation-invariant search for rotated ones (in
     # cross-image search; not rotation combined with a scale change). Turns
-    # flip_invariant on and widens query_scales. About 13x slower and twice the
+    # flip_invariant on and widens query_scales. About 9x slower and twice the
     # memory; region NFAs are multiplied by the number of searches combined.
     thorough: bool = field(
         default_factory=lambda: _env_bool("SPLICETRAIL_THOROUGH", False)

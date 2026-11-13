@@ -288,7 +288,7 @@ def main(argv=None):
     print(
         f"\nSpliceTrail benchmark | {args.dataset} {task} | {len(positives)} pos + {len(negatives)} neg | "
         f"grade={args.grade} jpeg={args.jpeg} thorough={args.thorough} "
-        f"query_scales={args.query_scales or [1.0]}\n"
+        f"query_scales={config.query_scales}\n"
     )
     print(_format_table(results))
 

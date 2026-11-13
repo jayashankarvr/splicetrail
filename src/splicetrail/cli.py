@@ -52,7 +52,7 @@ def validate_params(
 
 THOROUGH_HELP = (
     "Also check mirrored, enlarged and rotated copies, not just copied, recolored and "
-    "shrunk ones (rotation across images only, not within one image); about 13x slower"
+    "shrunk ones (rotation across images only, not within one image); about 9x slower"
 )
 
 
