@@ -3,7 +3,8 @@
 > FastAPI-based REST interface for the SpliceTrail forensics engine
 
 **Base URL**: `http://localhost:8000`
-**API Version**: 0.2.0-alpha
+
+The API reports its version in `GET /` and `GET /health`.
 
 ---
 
@@ -11,6 +12,7 @@
 
 - [Quick Start](#quick-start)
 - [Authentication](#authentication)
+- [Server Settings](#server-settings)
 - [Endpoints](#endpoints)
   - [Health Checks](#health-checks)
   - [Configuration](#configuration)
@@ -29,11 +31,15 @@
 ### Start the Server
 
 ```bash
-# Using python module
+# Using python module (listens on 127.0.0.1:8000)
+python -m splicetrail serve --port 8000
+
+# Reachable from other machines: set a key first
+export SPLICETRAIL_API_KEY="$(openssl rand -hex 32)"
 python -m splicetrail serve --host 0.0.0.0 --port 8000
 
-# Using Docker
-docker-compose up
+# Using Docker (published on the host's 127.0.0.1:8000)
+docker compose up
 
 # Using Makefile
 make serve
@@ -54,16 +60,79 @@ curl -X POST "http://localhost:8000/match?return_heatmap=true" \
   -F "file=@source.jpg"
 ```
 
+With `SPLICETRAIL_API_KEY` set, add the key to every request:
+
+```bash
+curl -H "X-API-Key: $SPLICETRAIL_API_KEY" http://localhost:8000/health
+curl -X POST "http://localhost:8000/index?image_id=target_001" \
+  -H "X-API-Key: $SPLICETRAIL_API_KEY" -F "file=@target.jpg"
+```
+
+The examples below leave the header out; add it whenever a key is set.
+
 ---
 
 ## Authentication
 
-**Current Version**: No authentication required
+Without `SPLICETRAIL_API_KEY` there is no authentication: anyone who can reach
+the port can index, match and delete images. That is why the server binds to
+`127.0.0.1` by default, and logs a warning when bound anywhere else without a
+key.
 
-**Production Deployment**: Add authentication via:
-- Nginx reverse proxy with Basic Auth
-- API Gateway (AWS API Gateway, Kong, etc.)
-- Custom FastAPI middleware
+With `SPLICETRAIL_API_KEY` set, every request needs the header
+`X-API-Key: <key>`. The only exceptions are the probes `GET /health/live` and
+`GET /health/ready`, so container health checks keep working. Everything else,
+including `/`, `/health`, `/docs`, `/redoc` and `/openapi.json`, answers a
+missing or wrong key with:
+
+```json
+{"detail": "Missing or invalid API key (X-API-Key header)"}
+```
+
+**Status Codes:**
+- `401 Unauthorized`: Missing or wrong `X-API-Key`
+
+The key travels in clear text over plain HTTP; put a TLS-terminating reverse
+proxy in front (see `nginx.conf`) when the API leaves the machine.
+
+---
+
+## Server Settings
+
+Read from the environment when the server starts:
+
+| Variable | Default | Effect |
+|---|---|---|
+| `SPLICETRAIL_API_KEY` | unset (no authentication) | Require `X-API-Key` on every endpoint except `/health/live` and `/health/ready` |
+| `SPLICETRAIL_INDEX_DIR` | unset (index kept in memory only) | Load the index from this directory at startup and save it after every index and delete |
+| `SPLICETRAIL_MAX_TARGETS` | 1000 | Most targets kept; past it, the oldest indexed target is evicted |
+| `SPLICETRAIL_MAX_IMAGE_PIXELS` | 500000 | Pixel cap for `/index` and `/match` uploads (413 above it) |
+| `SPLICETRAIL_LOCK_TIMEOUT` | 30 | Seconds a request waits for the engine before 503 |
+| `SPLICETRAIL_HASH_LIST` | unset | CSV of known hashes for `/hash` (same as `serve --hash-list`) |
+| `SPLICETRAIL_PHOTODNA_KEY` | unset | PhotoDNA Cloud Service key; `photodna` on `/hash` also needs `SPLICETRAIL_API_KEY` |
+
+The engine settings (`SPLICETRAIL_PATCH_SIZE`, `SPLICETRAIL_THOROUGH` and the
+others) are listed in the README under Environment Variables.
+
+**Limits that aren't configurable:** uploads are capped at 50 MB, and `/hash`
+accepts images up to 50 megapixels (or the pixel cap, if that is higher).
+
+**Persistence.** With `SPLICETRAIL_INDEX_DIR`, each index or delete writes a
+complete new snapshot of the index into that directory and then switches to
+it atomically, so a crash leaves the last complete save. Indexed images are
+kept there as lossless PNGs, because a reloaded index re-reads patches from
+them. A save rewrites the whole index, so it gets slower as the index grows;
+files aren't fsynced, so a power cut (unlike a process crash) can lose the
+last save. A saved index keeps the patch size and other index-shaping settings
+it was built with, whatever the server is started with. If the directory
+holds an index that can't be read, the server refuses to start. Without the
+variable, the index lives in memory and is lost on restart.
+
+**Concurrency.** Index, match and delete take turns on the engine and run in a
+worker thread, so health checks keep answering. A request that can't get the
+engine within `SPLICETRAIL_LOCK_TIMEOUT` seconds gets 503 with a `Retry-After`
+header. A request that has started can't be cancelled: it finishes even if the
+client disconnects.
 
 ---
 
@@ -79,7 +148,7 @@ Root endpoint - basic health check.
 ```json
 {
   "name": "SpliceTrail Forensics API",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "status": "healthy",
   "indexed_targets": 42
 }
@@ -87,12 +156,13 @@ Root endpoint - basic health check.
 
 **Status Codes:**
 - `200 OK`: Service is running
+- `401 Unauthorized`: API key required and missing or wrong
 
 ---
 
 #### `GET /health/live`
 
-Kubernetes liveness probe - checks if service is alive.
+Kubernetes liveness probe - checks if service is alive. Never needs the API key.
 
 **Response:**
 ```json
@@ -103,8 +173,7 @@ Kubernetes liveness probe - checks if service is alive.
 ```
 
 **Status Codes:**
-- `200 OK`: Process is running
-- `503 Service Unavailable`: Process is hung/crashed
+- `200 OK`: Process is running (no answer at all means it is hung)
 
 **Use Case**: Kubernetes will restart pod if this fails
 
@@ -113,6 +182,8 @@ Kubernetes liveness probe - checks if service is alive.
 #### `GET /health/ready`
 
 Kubernetes readiness probe - checks if service is ready to accept requests.
+Never needs the API key. With `SPLICETRAIL_INDEX_DIR` set it also checks that
+the directory is writable and reports its free space.
 
 **Response:**
 ```json
@@ -120,13 +191,16 @@ Kubernetes readiness probe - checks if service is ready to accept requests.
   "status": "ready",
   "index_size": 1500000,
   "target_count": 42,
-  "timestamp": 1704652800.0
+  "timestamp": 1704652800.0,
+  "storage_free_mb": 51200
 }
 ```
 
+`storage_free_mb` is present only with `SPLICETRAIL_INDEX_DIR`.
+
 **Status Codes:**
 - `200 OK`: Service is ready
-- `503 Service Unavailable`: Service is initializing or unhealthy
+- `503 Service Unavailable`: The engine can't be read, or the index directory isn't writable
 
 **Use Case**: Kubernetes will not send traffic to pod if this fails
 
@@ -140,13 +214,14 @@ Comprehensive health check with detailed metrics.
 ```json
 {
   "status": "healthy",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "timestamp": 1704652800.0,
   "uptime_seconds": 3600.5,
   "index": {
     "size": 1500000,
     "target_count": 42,
-    "target_ids": ["img_3f9c2a1b7d04", "..."]
+    "max_targets": 1000,
+    "persistent": true
   },
   "config": {
     "patch_size": 5,
@@ -160,10 +235,15 @@ Comprehensive health check with detailed metrics.
 }
 ```
 
+`index.persistent` is true when `SPLICETRAIL_INDEX_DIR` is set. Target ids are
+no longer listed here (they were before 0.3.0); use `GET /targets`.
+
 **Status Codes:**
 - `200 OK`: Service is healthy
+- `401 Unauthorized`: API key required and missing or wrong
 
-**Note**: Memory stats require `psutil` package
+**Note**: Memory stats require the `psutil` package; without it `memory` is
+the string `"psutil not available"`.
 
 ---
 
@@ -213,8 +293,9 @@ Index a target image for later matching.
 
 **Limits:**
 - Max file size: 50MB
-- Max image pixels: 50 megapixels
+- Max image pixels: `SPLICETRAIL_MAX_IMAGE_PIXELS` (default 500,000)
 - `image_id` max length: 255 characters
+- Past `SPLICETRAIL_MAX_TARGETS` targets (default 1000), the oldest is evicted
 
 **Example:**
 ```bash
@@ -235,9 +316,12 @@ curl -X POST "http://localhost:8000/index?image_id=suspect_photo_001" \
 **Status Codes:**
 - `200 OK`: Image indexed successfully
 - `400 Bad Request`: Invalid image or parameters
+- `401 Unauthorized`: API key required and missing or wrong
 - `409 Conflict`: Image ID already exists
-- `413 Payload Too Large`: File exceeds limits
-- `500 Internal Server Error`: Indexing failed
+- `413 Payload Too Large`: File over 50 MB or image over the pixel cap
+- `422 Unprocessable Entity`: No `file` field, or `image_id` over 255 characters
+- `500 Internal Server Error`: Indexing failed (see [Error Handling](#error-handling))
+- `503 Service Unavailable`: Engine busy past the lock timeout; retry after `Retry-After` seconds
 
 **Error Example:**
 ```json
@@ -273,6 +357,7 @@ Each entry holds only the target's id and its size; server file paths are never 
 
 **Status Codes:**
 - `200 OK`: Targets listed
+- `401 Unauthorized`: API key required and missing or wrong
 
 ---
 
@@ -298,7 +383,9 @@ curl -X DELETE http://localhost:8000/targets/suspect_photo_001
 
 **Status Codes:**
 - `200 OK`: Target removed
+- `401 Unauthorized`: API key required and missing or wrong
 - `404 Not Found`: Target does not exist
+- `503 Service Unavailable`: Engine busy past the lock timeout
 
 ---
 
@@ -382,7 +469,10 @@ curl -X POST "http://localhost:8000/match?target_ids=suspect_photo_001,suspect_p
 **Status Codes:**
 - `200 OK`: Matching completed
 - `400 Bad Request`: Invalid image or parameters
-- `413 Payload Too Large`: File exceeds limits
+- `401 Unauthorized`: API key required and missing or wrong
+- `413 Payload Too Large`: File over 50 MB or image over the pixel cap
+- `500 Internal Server Error`: Matching failed
+- `503 Service Unavailable`: Engine busy past the lock timeout
 
 **Heatmap Decoding:**
 ```python
@@ -454,13 +544,20 @@ curl -X POST "http://localhost:8000/hash?algorithm=pdq&algorithm=phash" \
   Service's answer, passed through unchanged
 
 **PhotoDNA:** `algorithm=photodna` sends the uploaded image to Microsoft. It is
-refused unless the server operator has a PhotoDNA licence and has set
-`SPLICETRAIL_PHOTODNA_KEY` on the server.
+refused unless the server operator has a PhotoDNA licence and has set both
+`SPLICETRAIL_PHOTODNA_KEY` and `SPLICETRAIL_API_KEY` on the server (so only key
+holders can send images to Microsoft).
+
+**Limits:** 50 MB per file; images up to 50 megapixels (or
+`SPLICETRAIL_MAX_IMAGE_PIXELS`, if higher). `/hash` doesn't use the engine, so
+it doesn't wait for the lock.
 
 **Status Codes:**
 - `200 OK`: Hashed
 - `400 Bad Request`: Unknown algorithm or unreadable image
-- `403 Forbidden`: `photodna` asked for but not enabled on this server
+- `401 Unauthorized`: API key required and missing or wrong
+- `403 Forbidden`: `photodna` asked for but not enabled on this server (no
+  `SPLICETRAIL_API_KEY` or no `SPLICETRAIL_PHOTODNA_KEY`)
 - `413 Payload Too Large`: File exceeds limits
 - `501 Not Implemented`: The algorithm's library isn't installed on the server
   (the message says how to install it), or the server's PhotoDNA settings are unusable
@@ -480,23 +577,33 @@ refused unless the server operator has a PhotoDNA licence and has set
 }
 ```
 
+Unexpected server errors return a fixed message and an id, also sent in the
+`X-Request-ID` header; the traceback is in the server log under that id:
+
+```json
+{"detail": "Internal server error", "request_id": "3f9c2a1b7d04e5a6"}
+```
+
 ### Common Error Codes
 
 | Status Code | Meaning | Example |
 |-------------|---------|---------|
 | `400 Bad Request` | Invalid input | Unsupported image format, invalid parameters |
+| `401 Unauthorized` | Missing or wrong API key | `X-API-Key` absent while `SPLICETRAIL_API_KEY` is set |
+| `403 Forbidden` | Feature disabled | `photodna` without the needed keys |
 | `404 Not Found` | Resource not found | Target ID does not exist |
 | `409 Conflict` | Resource conflict | Duplicate image ID |
-| `413 Payload Too Large` | File too large | Image exceeds 50MB or 50MP |
+| `413 Payload Too Large` | Too large | File over 50 MB, or image over the pixel cap |
+| `422 Unprocessable Entity` | Malformed request | Missing `file` field |
 | `500 Internal Server Error` | Server error | Indexing or matching failed |
-| `503 Service Unavailable` | Service not ready | Initializing or unhealthy |
+| `503 Service Unavailable` | Busy or not ready | Engine busy past the lock timeout (`Retry-After` set); readiness check failed |
 
 ### Error Examples
 
 **Invalid Image Format:**
 ```json
 {
-  "detail": "Unsupported format: GIF. Allowed: {'JPEG', 'PNG', 'BMP', 'TIFF', 'WEBP'}"
+  "detail": "Unsupported format: GIF. Allowed: ['BMP', 'JPEG', 'PNG', 'TIFF', 'WEBP']"
 }
 ```
 
@@ -507,10 +614,17 @@ refused unless the server operator has a PhotoDNA licence and has set
 }
 ```
 
-**Decompression Bomb:**
+**Too Many Pixels:**
 ```json
 {
-  "detail": "Image too large. Maximum 50000000 pixels"
+  "detail": "Image too large: 1024x768. Maximum 500000 pixels"
+}
+```
+
+**Engine Busy** (with a `Retry-After` header):
+```json
+{
+  "detail": "Server busy: another request is using the index; retry later"
 }
 ```
 
@@ -544,14 +658,18 @@ This limits each IP to 10 requests/second with burst up to 20.
 ### Python Client
 
 ```python
+import os
+
 import requests
-from pathlib import Path
 
 API_BASE = "http://localhost:8000"
+# Only needed when the server has SPLICETRAIL_API_KEY set
+session = requests.Session()
+session.headers["X-API-Key"] = os.environ.get("SPLICETRAIL_API_KEY", "")
 
 # Index a target
 with open("target.jpg", "rb") as f:
-    response = requests.post(
+    response = session.post(
         f"{API_BASE}/index",
         params={"image_id": "target_001"},
         files={"file": f},
@@ -560,7 +678,7 @@ with open("target.jpg", "rb") as f:
 
 # Match a source
 with open("source.jpg", "rb") as f:
-    response = requests.post(
+    response = session.post(
         f"{API_BASE}/match",
         params={"target_ids": "target_001", "return_heatmap": "true"},
         files={"file": f},
@@ -585,12 +703,12 @@ with open("source.jpg", "rb") as f:
         heatmap.save("heatmap.png")
 
 # List all targets
-response = requests.get(f"{API_BASE}/targets")
+response = session.get(f"{API_BASE}/targets")
 targets = response.json()
 print(f"Indexed targets: {targets['count']}")
 
 # Delete a target
-response = requests.delete(f"{API_BASE}/targets/target_001")
+response = session.delete(f"{API_BASE}/targets/target_001")
 print(response.json())
 ```
 
@@ -601,7 +719,7 @@ print(response.json())
 for img in targets/*.jpg; do
   id=$(basename "$img" .jpg)
   curl -X POST "http://localhost:8000/index?image_id=$id" \
-    -F "file=@$img"
+    -H "X-API-Key: $SPLICETRAIL_API_KEY" -F "file=@$img"
 done
 ```
 
@@ -627,6 +745,7 @@ async function indexImage(file, imageId) {
   const formData = new FormData();
   formData.append('file', file);
 
+  // headers: { 'X-API-Key': key } when the server has SPLICETRAIL_API_KEY set
   const url = `http://localhost:8000/index?image_id=${encodeURIComponent(imageId)}`;
   const response = await fetch(url, {
     method: 'POST',
@@ -689,7 +808,9 @@ if (result.heatmap_base64) {
 
 Index, match and delete run in a worker thread, so the server stays responsive
 (health checks keep answering). They take turns on the engine, so throughput
-doesn't grow with client concurrency; run more replicas for that. Client-side
+doesn't grow with client concurrency, and requests queued longer than
+`SPLICETRAIL_LOCK_TIMEOUT` get 503. Each server process has its own index, so
+more replicas don't share targets (a shared index isn't supported). Client-side
 concurrency still works:
 
 ```python
@@ -719,32 +840,26 @@ export SPLICETRAIL_MAX_TARGETS=100
 ```
 
 When the limit is reached, the least recently indexed targets are evicted and
-their descriptors removed from the index.
+their descriptors removed from the index. The API uses 1000 when the variable
+isn't set.
 
 ---
 
 ## Deployment Checklist
 
-- [ ] Set appropriate `SPLICETRAIL_MAX_TARGETS` for your memory budget
-- [ ] Configure health check endpoints in orchestrator
-- [ ] Add authentication (Nginx Basic Auth, API Gateway, etc.)
-- [ ] Enable rate limiting in reverse proxy
-- [ ] Set up monitoring (Prometheus, DataDog, etc.)
-- [ ] Configure persistent storage for indexes
-- [ ] Test backup/restore procedures
-- [ ] Document emergency runbook
+- [ ] Set `SPLICETRAIL_API_KEY` (and send `X-API-Key` from clients)
+- [ ] Keep the default `127.0.0.1` bind, or publish only through a TLS reverse proxy
+- [ ] Set `SPLICETRAIL_MAX_TARGETS` and `SPLICETRAIL_MAX_IMAGE_PIXELS` for your memory and time budget
+- [ ] Set `SPLICETRAIL_INDEX_DIR` on persistent storage if the index must survive restarts
+- [ ] Configure `/health/live` and `/health/ready` in the orchestrator
+- [ ] Enable rate limiting in the reverse proxy
+- [ ] Back up the index directory
 
 ---
 
 ## OpenAPI Documentation
 
-Interactive API documentation available at:
+Interactive API documentation (needs the API key when one is set) is available at:
 - **Swagger UI**: `http://localhost:8000/docs`
 - **ReDoc**: `http://localhost:8000/redoc`
 - **OpenAPI JSON**: `http://localhost:8000/openapi.json`
-
----
-
-**Version**: 0.2.0-alpha
-**Last Updated**: 2026-01-08
-**Maintainer**: SpliceTrail Team
