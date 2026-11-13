@@ -29,7 +29,7 @@ except ImportError:
 
 from splicetrail import ForensicsEngine, Config, __version__
 from splicetrail.engine import _env_float, _env_int
-from splicetrail.exceptions import DependencyError, TargetExistsError
+from splicetrail.exceptions import DependencyError, ImageError, TargetExistsError
 from splicetrail.jpeg import sigma_from_tables
 from splicetrail.report import region_offset
 
@@ -776,9 +776,10 @@ def create_app(
                 heatmap_base64=heatmap_b64,
             )
 
-        except HTTPException:
-            raise
-        except ValueError as e:
+        except ImageError as e:
+            # Raised by our own input checks with a message meant for the
+            # caller. Any other error is a bug: the request guard turns it into
+            # a 500 with a request id and logs the traceback.
             raise HTTPException(status_code=400, detail=str(e))
 
     @app.post("/hash")
@@ -846,8 +847,14 @@ def create_app(
                 )
             try:
                 client = photodna.PhotoDnaClient()
-            except photodna.PhotoDnaError as e:
-                raise HTTPException(status_code=501, detail=str(e))
+            except photodna.PhotoDnaError:
+                logger.exception("photodna client setup failed")
+                raise HTTPException(
+                    status_code=501,
+                    detail="photodna is unavailable on this server: it needs the "
+                    "requests package (pip install splicetrail[hash]) and a valid "
+                    "SPLICETRAIL_PHOTODNA_ENDPOINT; the server log has the details",
+                )
 
         contents = await read_upload(file)
         image_array, _ = await run_in_threadpool(
@@ -858,12 +865,11 @@ def create_app(
             hashes = await run_in_threadpool(
                 hash_image, image_array, names, dihedral=config.thorough
             )
-        except DependencyError as e:
-            raise HTTPException(status_code=501, detail=str(e))
-        except RuntimeError as e:
-            raise HTTPException(
-                status_code=502, detail=f"Hashing with {', '.join(names)} failed: {e}"
-            )
+        except DependencyError:
+            logger.exception("hash dependency missing for %s", names)
+            raise HTTPException(status_code=501, detail=_missing_hash_dependency(names))
+        except RuntimeError:
+            raise _failed_upstream(f"Hashing with {', '.join(names)} failed")
 
         body: Dict[str, Any] = {
             "hashes": [
@@ -893,8 +899,8 @@ def create_app(
         if client is not None:
             try:
                 body["photodna"] = await run_in_threadpool(client.match, contents)
-            except photodna.PhotoDnaError as e:
-                raise HTTPException(status_code=502, detail=str(e))
+            except photodna.PhotoDnaError:
+                raise _failed_upstream("Upstream hashing service (PhotoDNA) failed")
 
         return body
 
@@ -922,6 +928,32 @@ def create_app(
         return {"success": True, "message": f"Removed target {image_id}"}
 
     return app
+
+
+def _missing_hash_dependency(names: List[str]) -> str:
+    """Fixed 501 text saying what to install for the requested algorithms."""
+    hints = []
+    if any(n in ("pdq", "phash") for n in names):
+        hints.append("pdq and phash need pip install splicetrail[hash]")
+    if "phash-lib" in names:
+        hints.append(
+            "phash-lib needs libpHash (e.g. apt install libphash0, "
+            "or set SPLICETRAIL_PHASH_LIB)"
+        )
+    return "A requested hash algorithm isn't installed on the server: " + "; ".join(
+        hints or ["pip install splicetrail[hash]"]
+    )
+
+
+def _failed_upstream(message: str) -> "HTTPException":
+    """A 502 with a fixed message and a request id; the cause is logged only."""
+    request_id = uuid.uuid4().hex[:16]
+    logger.exception("request %s: %s", request_id, message)
+    return HTTPException(
+        status_code=502,
+        detail=f"{message}; request id {request_id}",
+        headers={"X-Request-ID": request_id},
+    )
 
 
 def _is_loopback(host: str) -> bool:

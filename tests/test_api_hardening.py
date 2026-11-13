@@ -376,6 +376,82 @@ def test_targets_hide_server_paths(sample, tmp_path, monkeypatch):
     assert str(tmp_path) not in r.text and ".png" not in r.text
 
 
+def test_match_400_uses_our_message_only(sample):
+    from splicetrail.exceptions import InvalidImageError
+
+    client = TestClient(create_app(), raise_server_exceptions=False)
+    with mock.patch.object(
+        ForensicsEngine, "match", side_effect=InvalidImageError("Image is all black")
+    ):
+        r = client.post("/match", files={"file": _png(sample.tampered)})
+    assert r.status_code == 400 and r.json()["detail"] == "Image is all black"
+
+    # A bare ValueError is not a validation message: it never reaches the client.
+    with mock.patch.object(
+        ForensicsEngine, "match", side_effect=ValueError("secret /srv/path")
+    ):
+        r = client.post("/match", files={"file": _png(sample.tampered)})
+    assert r.status_code == 500 and "secret" not in r.text
+
+
+def test_hash_errors_are_fixed_messages(caplog):
+    from splicetrail import hashing
+    from splicetrail.exceptions import DependencyError
+
+    client = TestClient(create_app())
+    image = {"file": _png(np.zeros((8, 8, 3), np.uint8))}
+    with mock.patch.object(
+        hashing._ALGORITHMS["pdq"],
+        "compute",
+        side_effect=DependencyError("secret /opt/lib missing"),
+    ):
+        r = client.post("/hash", params={"algorithm": "pdq"}, files=image)
+    assert r.status_code == 501 and "secret" not in r.text
+    assert "pip install splicetrail[hash]" in r.json()["detail"]
+
+    with mock.patch.object(
+        hashing._ALGORITHMS["pdq"], "compute", side_effect=RuntimeError("secret boom")
+    ):
+        with caplog.at_level(logging.ERROR, logger="splicetrail.api"):
+            r = client.post("/hash", params={"algorithm": "pdq"}, files=image)
+    assert r.status_code == 502 and "secret" not in r.text
+    request_id = r.headers["X-Request-ID"]
+    assert request_id in r.json()["detail"] and "pdq" in r.json()["detail"]
+    assert request_id in caplog.text and "secret boom" in caplog.text
+
+
+def test_photodna_errors_are_fixed_messages(monkeypatch, caplog):
+    from splicetrail import photodna
+
+    monkeypatch.setenv("SPLICETRAIL_API_KEY", KEY)
+    monkeypatch.setenv("SPLICETRAIL_PHOTODNA_KEY", "secret-key")
+    client = TestClient(create_app())
+    call = dict(
+        params={"algorithm": "photodna"},
+        files={"file": _png(np.zeros((8, 8, 3), np.uint8))},
+        headers={"X-API-Key": KEY},
+    )
+    with mock.patch(
+        "splicetrail.photodna.PhotoDnaClient",
+        side_effect=photodna.PhotoDnaError("secret endpoint http://10.0.0.1"),
+    ):
+        r = client.post("/hash", **call)
+    assert r.status_code == 501 and "secret" not in r.text
+    assert "pip install splicetrail[hash]" in r.json()["detail"]
+
+    with mock.patch("splicetrail.photodna.PhotoDnaClient") as client_cls:
+        client_cls.return_value.match.side_effect = photodna.PhotoDnaError(
+            "secret HTTP 401"
+        )
+        with caplog.at_level(logging.ERROR, logger="splicetrail.api"):
+            r = client.post("/hash", **call)
+    assert r.status_code == 502 and "secret" not in r.text
+    detail = r.json()["detail"]
+    assert "Upstream hashing service" in detail
+    assert r.headers["X-Request-ID"] in detail
+    assert "secret HTTP 401" in caplog.text
+
+
 def test_lifespan_sets_start_time():
     with TestClient(create_app()) as client:
         assert client.get("/health").json()["uptime_seconds"] >= 0
