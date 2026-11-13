@@ -57,7 +57,9 @@ def native_scale_fraction(
         sw, sh = max(8, int(round(w * f))), max(8, int(round(h * f)))
         small = Image.fromarray(arr).resize((sw, sh), Image.LANCZOS)
         back = np.asarray(small.resize((w, h), Image.BICUBIC))
-        errs.append(float(np.mean((arr.astype(np.float32) - back.astype(np.float32)) ** 2)))
+        errs.append(
+            float(np.mean((arr.astype(np.float32) - back.astype(np.float32)) ** 2))
+        )
 
     errs = np.array(errs)
     floor = errs[fractions >= 0.95].mean() if (fractions >= 0.95).any() else errs[0]
@@ -85,7 +87,9 @@ def scale_inconsistency_map(
     grid = np.full((len(ys), len(xs)), np.nan, dtype=np.float32)
     for i, y in enumerate(ys):
         for j, x in enumerate(xs):
-            grid[i, j] = native_scale_fraction(image[y:y + window, x:x + window], **kwargs)
+            grid[i, j] = native_scale_fraction(
+                image[y : y + window, x : x + window], **kwargs
+            )
     return grid
 
 
@@ -98,10 +102,11 @@ class ScaleInconsistency:
     ``anomaly_bbox`` is the window with the lowest native scale - the likely
     resized region.
     """
+
     score: float
     min_fraction: float
     median_fraction: float
-    anomaly_bbox: Tuple[int, int, int, int]   # (x, y, w, h)
+    anomaly_bbox: Tuple[int, int, int, int]  # (x, y, w, h)
     window: int
     stride: int
 
@@ -132,7 +137,9 @@ def scale_inconsistency(
     )
 
 
-def scale_inconsistency_score(image: np.ndarray, window: int = 64, stride: int = 32, **kwargs) -> float:
+def scale_inconsistency_score(
+    image: np.ndarray, window: int = 64, stride: int = 32, **kwargs
+) -> float:
     """Single image-level score: how much the native scale varies across the image.
 
     ~0 for a uniformly-native image; larger when some region was resized relative

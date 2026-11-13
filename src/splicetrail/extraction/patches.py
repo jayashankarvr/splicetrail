@@ -7,7 +7,6 @@ from numpy.lib.stride_tricks import sliding_window_view
 
 from splicetrail.descriptors.core import luminance
 
-
 ENTROPY_BINS = 8
 
 
@@ -19,9 +18,10 @@ def max_entropy(size: int) -> float:
 @dataclass
 class PatchCollection:
     """Collection of extracted patches with metadata."""
+
     size: int
-    patches: np.ndarray      # shape: (N, size, size, 3)
-    coords: np.ndarray       # shape: (N, 2) as (x, y)
+    patches: np.ndarray  # shape: (N, size, size, 3)
+    coords: np.ndarray  # shape: (N, 2) as (x, y)
     entropy: Optional[np.ndarray] = None  # shape: (N,)
 
 
@@ -79,7 +79,7 @@ class PatchExtractor:
         # windows shape: (H-size+1, W-size+1, size, size, 3)
 
         # Apply stride
-        windows = windows[::self.stride, ::self.stride]
+        windows = windows[:: self.stride, :: self.stride]
         n_rows, n_cols = windows.shape[:2]
 
         # Reshape to (N, size, size, 3)
@@ -88,7 +88,7 @@ class PatchExtractor:
         # Generate coordinates
         ys = np.arange(0, height - self.size + 1, self.stride)
         xs = np.arange(0, width - self.size + 1, self.stride)
-        yy, xx = np.meshgrid(ys, xs, indexing='ij')
+        yy, xx = np.meshgrid(ys, xs, indexing="ij")
         all_coords = np.stack([xx.ravel(), yy.ravel()], axis=1)
 
         # Compute entropy for all patches (vectorized)
@@ -141,7 +141,9 @@ class PatchExtractor:
         bins = np.clip((gray * ENTROPY_BINS).astype(np.int64), 0, ENTROPY_BINS - 1)
         # One bincount over (row, bin) pairs gives every histogram at once.
         flat = bins + (np.arange(n, dtype=np.int64) * ENTROPY_BINS)[:, None]
-        hist = np.bincount(flat.ravel(), minlength=n * ENTROPY_BINS).reshape(n, ENTROPY_BINS)
+        hist = np.bincount(flat.ravel(), minlength=n * ENTROPY_BINS).reshape(
+            n, ENTROPY_BINS
+        )
         prob = hist / gray.shape[1]
         with np.errstate(divide="ignore", invalid="ignore"):
             terms = np.where(prob > 0, prob * np.log2(prob), 0.0)

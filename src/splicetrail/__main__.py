@@ -27,36 +27,30 @@ Examples:
 
 For more options, use the splicetrail CLI tool (if click is installed):
   splicetrail --help
-        """
+        """,
     )
 
     parser.add_argument(
         "command",
         choices=["serve", "version", "test", "match"],
-        help="Command to execute"
+        help="Command to execute",
     )
     parser.add_argument(
-        "--port",
-        type=int,
-        default=8000,
-        help="Port for API server (serve command)"
+        "--port", type=int, default=8000, help="Port for API server (serve command)"
     )
     parser.add_argument(
         "--host",
         type=str,
         default="0.0.0.0",
-        help="Host for API server (serve command)"
+        help="Host for API server (serve command)",
     )
-    parser.add_argument(
-        "images",
-        nargs="*",
-        help="Image files for match command"
-    )
+    parser.add_argument("images", nargs="*", help="Image files for match command")
 
     args = parser.parse_args()
 
     if args.command == "version":
         from splicetrail import __version__
+
         print(f"SpliceTrail version {__version__}")
         return 0
 
@@ -65,6 +59,7 @@ For more options, use the splicetrail CLI tool (if click is installed):
         print("Press Ctrl+C to stop")
         try:
             from splicetrail.api import run_server
+
             try:
                 run_server(host=args.host, port=args.port)
             except ValueError as e:
@@ -82,7 +77,10 @@ For more options, use the splicetrail CLI tool (if click is installed):
     elif args.command == "test":
         print("Running tests...")
         import pytest
-        exit_code = pytest.main(["-v", str(Path(__file__).parent.parent.parent / "tests")])
+
+        exit_code = pytest.main(
+            ["-v", str(Path(__file__).parent.parent.parent / "tests")]
+        )
         return exit_code
 
     elif args.command == "match":
@@ -93,6 +91,7 @@ For more options, use the splicetrail CLI tool (if click is installed):
 
         try:
             from splicetrail.cli import main as cli_main
+
             print("Using splicetrail CLI for match command...")
             sys.argv = ["splicetrail", "match"] + args.images
             return cli_main()

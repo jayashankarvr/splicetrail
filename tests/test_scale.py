@@ -17,14 +17,20 @@ def _texture(seed, size):
     img = (rng.rand(size, size, 3) * 255).astype(np.uint8)
     yy, xx = np.ogrid[:size, :size]
     for _ in range(8):
-        cy, cx, r = rng.randint(0, size), rng.randint(0, size), rng.randint(3, size // 4)
+        cy, cx, r = (
+            rng.randint(0, size),
+            rng.randint(0, size),
+            rng.randint(3, size // 4),
+        )
         img[(xx - cx) ** 2 + (yy - cy) ** 2 <= r * r] = rng.randint(0, 255, 3)
     return img
 
 
 def _upscale(img, factor):
     h, w = img.shape[:2]
-    small = Image.fromarray(img).resize((int(w / factor), int(h / factor)), Image.LANCZOS)
+    small = Image.fromarray(img).resize(
+        (int(w / factor), int(h / factor)), Image.LANCZOS
+    )
     return np.asarray(small.resize((w, h), Image.BICUBIC))
 
 

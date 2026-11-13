@@ -43,7 +43,9 @@ def test_formats(tmp_path):
     expected = [("pdq", PDQ_A, "a"), ("pdq", PDQ_B, "b")]
     full = write(tmp_path, f"pdq,{PDQ_A},a\npdq,{PDQ_B},b\n", "full.csv")
     two = write(tmp_path, f"{PDQ_A},a\n{PDQ_B},b\n", "two.csv")
-    header3 = write(tmp_path, f"algorithm,hash,id\npdq,{PDQ_A},a\npdq,{PDQ_B},b\n", "h3.csv")
+    header3 = write(
+        tmp_path, f"algorithm,hash,id\npdq,{PDQ_A},a\npdq,{PDQ_B},b\n", "h3.csv"
+    )
     header2 = write(tmp_path, f"hash,id\n{PDQ_A},a\n{PDQ_B},b\n", "h2.csv")
 
     assert entries(load_hash_list(full)) == expected
@@ -53,10 +55,16 @@ def test_formats(tmp_path):
     assert len(load_hash_list(full)) == 2
 
     bare = write(tmp_path, f"{PDQ_A}\n{PDQ_B}\n", "bare.csv")
-    assert entries(load_hash_list(bare, algorithm="pdq")) == [("pdq", PDQ_A, "1"), ("pdq", PDQ_B, "2")]
+    assert entries(load_hash_list(bare, algorithm="pdq")) == [
+        ("pdq", PDQ_A, "1"),
+        ("pdq", PDQ_B, "2"),
+    ]
     # The id is the line number in the file, so a header shifts it.
     bare_header = write(tmp_path, f"hash\n{PDQ_A}\n{PDQ_B}\n", "bareh.csv")
-    assert entries(load_hash_list(bare_header, algorithm="pdq")) == [("pdq", PDQ_A, "2"), ("pdq", PDQ_B, "3")]
+    assert entries(load_hash_list(bare_header, algorithm="pdq")) == [
+        ("pdq", PDQ_A, "2"),
+        ("pdq", PDQ_B, "3"),
+    ]
 
 
 def test_quoted_id_and_padded_fields(tmp_path):
@@ -79,7 +87,9 @@ def test_bad_lines(tmp_path):
     with pytest.raises(ValueError, match=r"line 2"):
         load_hash_list(short)
 
-    nonhex = write(tmp_path, f"pdq,{PDQ_A},a\n\npdq,{'g' + PDQ_A[1:]},b\n", "nonhex.csv")
+    nonhex = write(
+        tmp_path, f"pdq,{PDQ_A},a\n\npdq,{'g' + PDQ_A[1:]},b\n", "nonhex.csv"
+    )
     with pytest.raises(ValueError, match=r"line 3"):
         load_hash_list(nonhex)
 
@@ -112,7 +122,10 @@ def test_nearest_first_within_distance():
     assert [m.id for m in report.matches] == ["e3", "e2", "e1"]
     assert report.matches[0].algorithm == "pdq"
     assert report.matches[0].hex == PDQ_A
-    assert [m.distance for m in match_hashes(query, hl, max_distance=5).matches] == [0, 5]
+    assert [m.distance for m in match_hashes(query, hl, max_distance=5).matches] == [
+        0,
+        5,
+    ]
 
 
 def test_other_algorithms_ignored():

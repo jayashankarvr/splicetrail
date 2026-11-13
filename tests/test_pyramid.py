@@ -2,7 +2,11 @@
 
 import numpy as np
 import pytest
-from splicetrail.extraction.pyramid import ImagePyramid, PyramidPatchCollection, compute_effective_patch_size
+from splicetrail.extraction.pyramid import (
+    ImagePyramid,
+    PyramidPatchCollection,
+    compute_effective_patch_size,
+)
 from splicetrail.extraction.patches import PatchExtractor
 
 
@@ -221,7 +225,9 @@ class TestPyramidWithEngine:
         crop = target[32:96, 32:96]
         source = np.asarray(Image.fromarray(crop).resize((32, 32), Image.BOX))
 
-        engine = ForensicsEngine(Config(pyramid_enabled=True, pyramid_scales=[1.0, 0.5]))
+        engine = ForensicsEngine(
+            Config(pyramid_enabled=True, pyramid_scales=[1.0, 0.5])
+        )
         engine.index_target(target, "target")
         result = engine.match(source)
 

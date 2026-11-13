@@ -17,7 +17,12 @@ import os
 import sys
 from pathlib import Path
 
-from splicetrail.bench.datasets import CASIA2_KAGGLE_REF, COMOFOD_KAGGLE_REF, COVERAGE_KAGGLE_REF, data_dir
+from splicetrail.bench.datasets import (
+    CASIA2_KAGGLE_REF,
+    COMOFOD_KAGGLE_REF,
+    COVERAGE_KAGGLE_REF,
+    data_dir,
+)
 
 # name -> (kaggle ref, folder, a path that must exist afterwards, minimum files under it)
 DATASETS = {
@@ -67,7 +72,9 @@ def _download_with_token(ref: str, target: Path, token: str) -> None:
 
     archive = target / "archive.zip"
     url = f"https://www.kaggle.com/api/v1/datasets/download/{ref}"
-    with requests.get(url, headers={"Authorization": f"Bearer {token}"}, stream=True, timeout=60) as response:
+    with requests.get(
+        url, headers={"Authorization": f"Bearer {token}"}, stream=True, timeout=60
+    ) as response:
         response.raise_for_status()
         with open(archive, "wb") as f:
             for chunk in response.iter_content(chunk_size=1 << 20):
@@ -90,16 +97,22 @@ def download(name: str) -> Path:
     if token:
         _download_with_token(ref, target, token)
     else:
-        _kaggle_api().dataset_download_files(ref, path=str(target), unzip=True, quiet=False)
+        _kaggle_api().dataset_download_files(
+            ref, path=str(target), unzip=True, quiet=False
+        )
     count = sum(1 for _ in done.iterdir()) if done.exists() else 0
     if count < min_files:
-        raise SystemExit(f"download looks incomplete: {count} files in {done}, expected >= {min_files}")
+        raise SystemExit(
+            f"download looks incomplete: {count} files in {done}, expected >= {min_files}"
+        )
     print(f"{name}: {count} files in {done}")
     return target
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    )
     parser.add_argument("dataset", choices=sorted(DATASETS))
     args = parser.parse_args(argv)
     download(args.dataset)

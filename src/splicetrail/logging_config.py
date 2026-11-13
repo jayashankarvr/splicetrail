@@ -4,7 +4,6 @@ import logging
 import sys
 from typing import Optional
 
-
 # Package-level logger
 logger = logging.getLogger("splicetrail")
 

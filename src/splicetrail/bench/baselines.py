@@ -21,7 +21,9 @@ class Detector:
 
     name = "base"
 
-    def detect(self, donor: np.ndarray, tampered: np.ndarray) -> Tuple[np.ndarray, float]:
+    def detect(
+        self, donor: np.ndarray, tampered: np.ndarray
+    ) -> Tuple[np.ndarray, float]:
         raise NotImplementedError
 
 
@@ -37,7 +39,9 @@ class SpliceTrailDetector(Detector):
 
         self.config = config or Config()
 
-    def detect(self, donor: np.ndarray, tampered: np.ndarray) -> Tuple[np.ndarray, float]:
+    def detect(
+        self, donor: np.ndarray, tampered: np.ndarray
+    ) -> Tuple[np.ndarray, float]:
         from splicetrail.engine import ForensicsEngine
 
         h, w = tampered.shape[:2]
@@ -47,7 +51,9 @@ class SpliceTrailDetector(Detector):
 
         result = engine.match(tampered, return_heatmap=False)
         # No region at all ranks below any region; roc_auc_score rejects inf.
-        score = -result.coherent_regions[0].log10_nfa if result.coherent_regions else -1e9
+        score = (
+            -result.coherent_regions[0].log10_nfa if result.coherent_regions else -1e9
+        )
         return result.localization.mask, float(score)
 
 
@@ -71,7 +77,9 @@ class RootSiftRansacDetector(Detector):
         descriptors = descriptors / (descriptors.sum(axis=1, keepdims=True) + 1e-7)
         return np.sqrt(descriptors)
 
-    def detect(self, donor: np.ndarray, tampered: np.ndarray) -> Tuple[np.ndarray, float]:
+    def detect(
+        self, donor: np.ndarray, tampered: np.ndarray
+    ) -> Tuple[np.ndarray, float]:
         import cv2
 
         h, w = tampered.shape[:2]
@@ -91,14 +99,22 @@ class RootSiftRansacDetector(Detector):
 
         bf = cv2.BFMatcher(cv2.NORM_L2)
         knn = bf.knnMatch(des_t, des_d, k=2)  # query = tampered, train = donor
-        good = [m for pair in knn if len(pair) == 2 for m, n in [pair] if m.distance < self.ratio * n.distance]
+        good = [
+            m
+            for pair in knn
+            if len(pair) == 2
+            for m, n in [pair]
+            if m.distance < self.ratio * n.distance
+        ]
         if len(good) < self.min_inliers:
             return empty, float(len(good))
 
         pts_t = np.float32([kp_t[m.queryIdx].pt for m in good])
         pts_d = np.float32([kp_d[m.trainIdx].pt for m in good])
 
-        _, inliers = cv2.estimateAffinePartial2D(pts_d, pts_t, method=cv2.RANSAC, ransacReprojThreshold=3.0)
+        _, inliers = cv2.estimateAffinePartial2D(
+            pts_d, pts_t, method=cv2.RANSAC, ransacReprojThreshold=3.0
+        )
         if inliers is None:
             return empty, float(len(good))
 
@@ -113,5 +129,5 @@ class RootSiftRansacDetector(Detector):
             cv2.fillConvexPoly(mask, hull, 1)
         else:
             for px, py in inlier_pts.astype(int):
-                mask[max(0, py - 1):py + 2, max(0, px - 1):px + 2] = 1
+                mask[max(0, py - 1) : py + 2, max(0, px - 1) : px + 2] = 1
         return mask.astype(bool), float(n_inliers)

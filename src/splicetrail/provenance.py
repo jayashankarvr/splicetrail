@@ -24,9 +24,12 @@ from splicetrail.verification.nfa import fdr_select
 @dataclass
 class Link:
     """Regions shared by two images (or duplicated within one, when a == b)."""
+
     a: str
     b: str
-    regions: List[CoherentRegion] = field(default_factory=list)  # source side in a, target side in b
+    regions: List[CoherentRegion] = field(
+        default_factory=list
+    )  # source side in a, target side in b
 
     @property
     def log10_nfa(self) -> float:
@@ -56,7 +59,15 @@ def build_provenance(
     for image_id in ids:
         image, sigma = images[image_id]
         others = [other for other in ids if other != image_id]
-        searches = [engine.match(image, target_ids=others, return_heatmap=False, jpeg_sigma=sigma)] if others else []
+        searches = (
+            [
+                engine.match(
+                    image, target_ids=others, return_heatmap=False, jpeg_sigma=sigma
+                )
+            ]
+            if others
+            else []
+        )
         if copy_moves:
             searches.append(engine.match_self(image, jpeg_sigma=sigma))
         for result in searches:
@@ -67,7 +78,9 @@ def build_provenance(
     links: Dict[Tuple[str, str], Link] = {}
     for region in fdr_select(results, q=fdr):
         a = owners[id(region)]
-        b = region.image_id if region.image_id in images else a  # match_self names its target "self"
+        b = (
+            region.image_id if region.image_id in images else a
+        )  # match_self names its target "self"
         key = tuple(sorted((a, b)))
         link = links.get(key)
         # Both directions of a pair usually find the same region; keep one per pair direction.
@@ -96,19 +109,21 @@ def to_dict(links: Iterable[Link]) -> List[dict]:
     """JSON-ready links with every region's boxes and significance."""
     out = []
     for link in links:
-        out.append({
-            "a": link.a,
-            "b": link.b,
-            "log10_nfa": round(link.log10_nfa, 4),
-            "regions": [
-                {
-                    "bbox_in_a": list(map(int, r.source_bbox)),
-                    "bbox_in_b": list(map(int, r.target_bbox)),
-                    "num_matches": len(r.matches),
-                    "log10_nfa": round(float(r.log10_nfa), 4),
-                    "mirrored": bool(r.mirrored),
-                }
-                for r in link.regions
-            ],
-        })
+        out.append(
+            {
+                "a": link.a,
+                "b": link.b,
+                "log10_nfa": round(link.log10_nfa, 4),
+                "regions": [
+                    {
+                        "bbox_in_a": list(map(int, r.source_bbox)),
+                        "bbox_in_b": list(map(int, r.target_bbox)),
+                        "num_matches": len(r.matches),
+                        "log10_nfa": round(float(r.log10_nfa), 4),
+                        "mirrored": bool(r.mirrored),
+                    }
+                    for r in link.regions
+                ],
+            }
+        )
     return out

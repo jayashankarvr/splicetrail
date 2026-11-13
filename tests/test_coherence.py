@@ -16,10 +16,30 @@ class TestSpatialCoherence:
 
         # Create matches with consistent offset (40, 60)
         matches = [
-            Match(source_coord=(10, 20), target_coord=(50, 80), patch_size=3, probability=0.8),
-            Match(source_coord=(11, 20), target_coord=(51, 80), patch_size=3, probability=0.9),
-            Match(source_coord=(12, 21), target_coord=(52, 81), patch_size=3, probability=0.85),
-            Match(source_coord=(13, 22), target_coord=(53, 82), patch_size=3, probability=0.75),
+            Match(
+                source_coord=(10, 20),
+                target_coord=(50, 80),
+                patch_size=3,
+                probability=0.8,
+            ),
+            Match(
+                source_coord=(11, 20),
+                target_coord=(51, 80),
+                patch_size=3,
+                probability=0.9,
+            ),
+            Match(
+                source_coord=(12, 21),
+                target_coord=(52, 81),
+                patch_size=3,
+                probability=0.85,
+            ),
+            Match(
+                source_coord=(13, 22),
+                target_coord=(53, 82),
+                patch_size=3,
+                probability=0.75,
+            ),
         ]
 
         regions = verifier.find_coherent_regions(matches)
@@ -38,13 +58,43 @@ class TestSpatialCoherence:
         # Two groups with different offsets
         matches = [
             # Group 1: offset (40, 60)
-            Match(source_coord=(10, 20), target_coord=(50, 80), patch_size=3, probability=0.8),
-            Match(source_coord=(11, 20), target_coord=(51, 80), patch_size=3, probability=0.9),
-            Match(source_coord=(12, 21), target_coord=(52, 81), patch_size=3, probability=0.85),
+            Match(
+                source_coord=(10, 20),
+                target_coord=(50, 80),
+                patch_size=3,
+                probability=0.8,
+            ),
+            Match(
+                source_coord=(11, 20),
+                target_coord=(51, 80),
+                patch_size=3,
+                probability=0.9,
+            ),
+            Match(
+                source_coord=(12, 21),
+                target_coord=(52, 81),
+                patch_size=3,
+                probability=0.85,
+            ),
             # Group 2: offset (-10, -10)
-            Match(source_coord=(50, 50), target_coord=(40, 40), patch_size=3, probability=0.8),
-            Match(source_coord=(51, 51), target_coord=(41, 41), patch_size=3, probability=0.9),
-            Match(source_coord=(52, 52), target_coord=(42, 42), patch_size=3, probability=0.75),
+            Match(
+                source_coord=(50, 50),
+                target_coord=(40, 40),
+                patch_size=3,
+                probability=0.8,
+            ),
+            Match(
+                source_coord=(51, 51),
+                target_coord=(41, 41),
+                patch_size=3,
+                probability=0.9,
+            ),
+            Match(
+                source_coord=(52, 52),
+                target_coord=(42, 42),
+                patch_size=3,
+                probability=0.75,
+            ),
         ]
 
         regions = verifier.find_coherent_regions(matches)
@@ -86,9 +136,24 @@ class TestSpatialCoherence:
         )
 
         matches = [
-            Match(source_coord=(10, 20), target_coord=(50, 80), patch_size=4, probability=0.8),
-            Match(source_coord=(15, 20), target_coord=(55, 80), patch_size=4, probability=0.9),
-            Match(source_coord=(12, 25), target_coord=(52, 85), patch_size=4, probability=0.85),
+            Match(
+                source_coord=(10, 20),
+                target_coord=(50, 80),
+                patch_size=4,
+                probability=0.8,
+            ),
+            Match(
+                source_coord=(15, 20),
+                target_coord=(55, 80),
+                patch_size=4,
+                probability=0.9,
+            ),
+            Match(
+                source_coord=(12, 25),
+                target_coord=(52, 85),
+                patch_size=4,
+                probability=0.85,
+            ),
         ]
 
         regions = verifier.find_coherent_regions(matches)
@@ -111,17 +176,52 @@ class TestSpatialCoherence:
 
         # Small cluster
         small_matches = [
-            Match(source_coord=(10, 20), target_coord=(50, 80), patch_size=3, probability=0.8),
-            Match(source_coord=(11, 20), target_coord=(51, 80), patch_size=3, probability=0.8),
+            Match(
+                source_coord=(10, 20),
+                target_coord=(50, 80),
+                patch_size=3,
+                probability=0.8,
+            ),
+            Match(
+                source_coord=(11, 20),
+                target_coord=(51, 80),
+                patch_size=3,
+                probability=0.8,
+            ),
         ]
 
         # Large cluster (same probability)
         large_matches = [
-            Match(source_coord=(10, 20), target_coord=(50, 80), patch_size=3, probability=0.8),
-            Match(source_coord=(11, 20), target_coord=(51, 80), patch_size=3, probability=0.8),
-            Match(source_coord=(12, 20), target_coord=(52, 80), patch_size=3, probability=0.8),
-            Match(source_coord=(13, 20), target_coord=(53, 80), patch_size=3, probability=0.8),
-            Match(source_coord=(14, 20), target_coord=(54, 80), patch_size=3, probability=0.8),
+            Match(
+                source_coord=(10, 20),
+                target_coord=(50, 80),
+                patch_size=3,
+                probability=0.8,
+            ),
+            Match(
+                source_coord=(11, 20),
+                target_coord=(51, 80),
+                patch_size=3,
+                probability=0.8,
+            ),
+            Match(
+                source_coord=(12, 20),
+                target_coord=(52, 80),
+                patch_size=3,
+                probability=0.8,
+            ),
+            Match(
+                source_coord=(13, 20),
+                target_coord=(53, 80),
+                patch_size=3,
+                probability=0.8,
+            ),
+            Match(
+                source_coord=(14, 20),
+                target_coord=(54, 80),
+                patch_size=3,
+                probability=0.8,
+            ),
         ]
 
         small_regions = verifier.find_coherent_regions(small_matches)
@@ -138,8 +238,18 @@ class TestSpatialCoherence:
 
         # Offsets differ by 2 (within tolerance of 3)
         matches = [
-            Match(source_coord=(10, 20), target_coord=(50, 80), patch_size=3, probability=0.8),
-            Match(source_coord=(20, 30), target_coord=(60, 92), patch_size=3, probability=0.8),  # offset (40, 62)
+            Match(
+                source_coord=(10, 20),
+                target_coord=(50, 80),
+                patch_size=3,
+                probability=0.8,
+            ),
+            Match(
+                source_coord=(20, 30),
+                target_coord=(60, 92),
+                patch_size=3,
+                probability=0.8,
+            ),  # offset (40, 62)
         ]
 
         regions = verifier.find_coherent_regions(matches)
@@ -152,7 +262,13 @@ class TestSpatialCoherence:
         """Same offset in two different targets is two regions, not one."""
         verifier = SpatialCoherenceVerifier(offset_tolerance=1, min_cluster_size=3)
         matches = [
-            Match(source_coord=(i, 0), target_coord=(i + 5, 5), patch_size=3, probability=0.9, image_id=img)
+            Match(
+                source_coord=(i, 0),
+                target_coord=(i + 5, 5),
+                patch_size=3,
+                probability=0.9,
+                image_id=img,
+            )
             for img in ("a", "b")
             for i in range(3)
         ]
@@ -164,7 +280,9 @@ class TestSpatialCoherence:
         """A slow offset drift used to merge into one cluster via neighbouring cells."""
         verifier = SpatialCoherenceVerifier(offset_tolerance=1, min_cluster_size=2)
         matches = [
-            Match(source_coord=(0, 0), target_coord=(dx, 0), patch_size=3, probability=0.9)
+            Match(
+                source_coord=(0, 0), target_coord=(dx, 0), patch_size=3, probability=0.9
+            )
             for dx in range(0, 40)
             for _ in range(2)
         ]
@@ -176,7 +294,12 @@ class TestSpatialCoherence:
     def test_region_not_significant_until_scored(self):
         verifier = SpatialCoherenceVerifier(offset_tolerance=1, min_cluster_size=2)
         matches = [
-            Match(source_coord=(i, 0), target_coord=(i + 1, 0), patch_size=3, probability=0.9)
+            Match(
+                source_coord=(i, 0),
+                target_coord=(i + 1, 0),
+                patch_size=3,
+                probability=0.9,
+            )
             for i in range(3)
         ]
         region = verifier.find_coherent_regions(matches)[0]

@@ -48,9 +48,10 @@ class SearchHits:
     is the patch's position within that image's indexed patches. Distances are
     squared L2.
     """
-    distances: np.ndarray   # (N, k) float32
-    owner: np.ndarray       # (N, k) int64
-    patch_idx: np.ndarray   # (N, k) int64
+
+    distances: np.ndarray  # (N, k) float32
+    owner: np.ndarray  # (N, k) int64
+    patch_idx: np.ndarray  # (N, k) int64
     image_ids: List[str]
 
 
@@ -70,7 +71,9 @@ class ANNIndex:
         if self.kind == "ivfpq" and self._trained:
             faiss.extract_index_ivf(self._index).nprobe = self.nprobe
 
-    def __init__(self, dim: int, kind: str = "flat", train_size: int = 50_000, nprobe: int = 16):
+    def __init__(
+        self, dim: int, kind: str = "flat", train_size: int = 50_000, nprobe: int = 16
+    ):
         if faiss is None:
             raise DependencyError("faiss-cpu required: pip install faiss-cpu")
         if kind not in KINDS:
@@ -83,11 +86,15 @@ class ANNIndex:
         self._trained = kind != "ivfpq"
         self._index = faiss.IndexIDMap2(faiss.IndexFlatL2(dim))
         self._next_id = 0
-        self._ranges: "OrderedDict[str, Tuple[int, int]]" = OrderedDict()  # image_id -> (start, count)
+        self._ranges: "OrderedDict[str, Tuple[int, int]]" = (
+            OrderedDict()
+        )  # image_id -> (start, count)
 
     def _train_ivfpq(self) -> None:
         """Swap the exact buffer for a trained IVF-PQ index holding the same vectors."""
-        ids = np.concatenate([np.arange(s, s + c, dtype=np.int64) for s, c in self._ranges.values() if c])
+        ids = np.concatenate(
+            [np.arange(s, s + c, dtype=np.int64) for s, c in self._ranges.values() if c]
+        )
         vectors = self._index.reconstruct_batch(ids)
         nlist = int(np.clip(4 * np.sqrt(len(vectors)), 16, 4096))
         # About five descriptor values per sub-quantizer, one byte each.
@@ -111,7 +118,9 @@ class ANNIndex:
                 raise TargetExistsError(f"'{image_id}' is already indexed")
             descriptors = np.ascontiguousarray(descriptors, dtype=np.float32)
             if descriptors.ndim != 2 or descriptors.shape[1] != self.dim:
-                raise IndexStoreError(f"expected (N, {self.dim}) descriptors, got {descriptors.shape}")
+                raise IndexStoreError(
+                    f"expected (N, {self.dim}) descriptors, got {descriptors.shape}"
+                )
             n = len(descriptors)
             ids = np.arange(self._next_id, self._next_id + n, dtype=np.int64)
             if n:
@@ -130,14 +139,18 @@ class ANNIndex:
             if count:
                 if self.kind == "ivfpq" and self._trained:
                     # The IVF hash-table direct map only removes by explicit id list.
-                    self._index.remove_ids(np.arange(start, start + count, dtype=np.int64))
+                    self._index.remove_ids(
+                        np.arange(start, start + count, dtype=np.int64)
+                    )
                 else:
                     self._index.remove_ids(faiss.IDSelectorRange(start, start + count))
             return True
 
     def search(self, queries: np.ndarray, k: int) -> SearchHits:
         with self._lock:
-            queries = np.ascontiguousarray(queries, dtype=np.float32).reshape(-1, self.dim)
+            queries = np.ascontiguousarray(queries, dtype=np.float32).reshape(
+                -1, self.dim
+            )
             n = len(queries)
             image_ids = list(self._ranges)
             k = min(k, self._index.ntotal)
@@ -150,22 +163,30 @@ class ANNIndex:
             ids = np.empty((n, k), dtype=np.int64)
             for start in range(0, n, _SEARCH_CHUNK):
                 stop = min(start + _SEARCH_CHUNK, n)
-                distances[start:stop], ids[start:stop] = self._index.search(queries[start:stop], k)
+                distances[start:stop], ids[start:stop] = self._index.search(
+                    queries[start:stop], k
+                )
 
             owner, patch_idx = self._resolve(ids, image_ids)
             return SearchHits(distances, owner, patch_idx, image_ids)
 
-    def _resolve(self, ids: np.ndarray, image_ids: List[str]) -> Tuple[np.ndarray, np.ndarray]:
+    def _resolve(
+        self, ids: np.ndarray, image_ids: List[str]
+    ) -> Tuple[np.ndarray, np.ndarray]:
         """Map vector ids to (owner index, patch index); -1 where there's no hit."""
         # Ranges are handed out in insertion order, so starts are already sorted.
         # Empty ranges share their start with the next image and are left out,
         # otherwise they could be credited with that image's hits.
-        owners = [i for i, image_id in enumerate(image_ids) if self._ranges[image_id][1] > 0]
+        owners = [
+            i for i, image_id in enumerate(image_ids) if self._ranges[image_id][1] > 0
+        ]
         if not owners:
             missing = np.full(ids.shape, -1, dtype=np.int64)
             return missing, missing.copy()
         owners = np.array(owners, dtype=np.int64)
-        starts = np.array([self._ranges[image_ids[i]][0] for i in owners], dtype=np.int64)
+        starts = np.array(
+            [self._ranges[image_ids[i]][0] for i in owners], dtype=np.int64
+        )
         pos = np.searchsorted(starts, ids, side="right") - 1
         valid = (ids >= 0) & (pos >= 0)
         pos = np.clip(pos, 0, None)
@@ -201,9 +222,14 @@ class ANNIndex:
                 "train_size": self.train_size,
                 "nprobe": self.nprobe,
                 "next_id": self._next_id,
-                "targets": [[image_id, start, count] for image_id, (start, count) in self._ranges.items()],
+                "targets": [
+                    [image_id, start, count]
+                    for image_id, (start, count) in self._ranges.items()
+                ],
             }
-            _atomic_write(f"{path}.index", lambda tmp: faiss.write_index(self._index, tmp))
+            _atomic_write(
+                f"{path}.index", lambda tmp: faiss.write_index(self._index, tmp)
+            )
             _atomic_write(f"{path}.meta.json", lambda tmp: _write_json(tmp, meta))
 
     @classmethod
@@ -217,13 +243,19 @@ class ANNIndex:
             raise IndexStoreError(
                 f"unsupported index format {meta.get('version')!r}; re-index with this SpliceTrail version"
             )
-        index = cls(int(meta["dim"]), kind=meta.get("kind", "flat"),
-                    train_size=int(meta.get("train_size", 50_000)), nprobe=int(meta.get("nprobe", 16)))
+        index = cls(
+            int(meta["dim"]),
+            kind=meta.get("kind", "flat"),
+            train_size=int(meta.get("train_size", 50_000)),
+            nprobe=int(meta.get("nprobe", 16)),
+        )
         index._index = faiss.read_index(f"{path}.index")
         index._trained = bool(meta.get("trained", True))
         index.set_nprobe(index.nprobe)
         index._next_id = int(meta["next_id"])
-        index._ranges = OrderedDict((t[0], (int(t[1]), int(t[2]))) for t in meta["targets"])
+        index._ranges = OrderedDict(
+            (t[0], (int(t[1]), int(t[2]))) for t in meta["targets"]
+        )
         expected = sum(count for _, count in index._ranges.values())
         if index._index.ntotal != expected or index._index.d != index.dim:
             raise IndexCorruptedError(

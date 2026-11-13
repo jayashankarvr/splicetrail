@@ -39,8 +39,12 @@ def ring_footprint(patch_size: int) -> int:
     return 2 * int(np.ceil(ring_radii(patch_size)[-1])) + 1
 
 
-def ring_samples(image: np.ndarray, coords: np.ndarray, patch_size: int,
-                 phase: Optional[np.ndarray] = None) -> np.ndarray:
+def ring_samples(
+    image: np.ndarray,
+    coords: np.ndarray,
+    patch_size: int,
+    phase: Optional[np.ndarray] = None,
+) -> np.ndarray:
     """Samples on rings around each patch centre: (N, rings, angles) for a grey
     image, (N, rings, angles, 3) for colour (an (H, W, 3) array, or a tuple of
     contiguous per-channel planes, which is faster to sample).
@@ -50,7 +54,9 @@ def ring_samples(image: np.ndarray, coords: np.ndarray, patch_size: int,
     """
     radii = ring_radii(patch_size)
     a = 2 * np.pi * np.arange(RING_ANGLES) / RING_ANGLES
-    a = a[None, :] + (0.0 if phase is None else np.asarray(phase, dtype=np.float64)[:, None])
+    a = a[None, :] + (
+        0.0 if phase is None else np.asarray(phase, dtype=np.float64)[:, None]
+    )
     a = np.broadcast_to(a, (len(coords), RING_ANGLES))
     half = (patch_size - 1) / 2.0
     cx = coords[:, 0] + half
@@ -59,11 +65,19 @@ def ring_samples(image: np.ndarray, coords: np.ndarray, patch_size: int,
     ys = cy[:, None, None] + radii[None, :, None] * np.sin(a)[:, None, :]
     shape = (len(coords), len(radii), RING_ANGLES)
     if not isinstance(image, (list, tuple)) and image.ndim == 2:
-        return map_coordinates(image, [ys.ravel(), xs.ravel()], order=1, mode="nearest").reshape(shape)
-    planes = image if isinstance(image, (list, tuple)) else [image[..., c] for c in range(image.shape[2])]
+        return map_coordinates(
+            image, [ys.ravel(), xs.ravel()], order=1, mode="nearest"
+        ).reshape(shape)
+    planes = (
+        image
+        if isinstance(image, (list, tuple))
+        else [image[..., c] for c in range(image.shape[2])]
+    )
     out = np.empty(shape + (len(planes),), dtype=np.float32)
     for c, plane in enumerate(planes):
-        out[..., c] = map_coordinates(plane, [ys.ravel(), xs.ravel()], order=1, mode="nearest").reshape(shape)
+        out[..., c] = map_coordinates(
+            plane, [ys.ravel(), xs.ravel()], order=1, mode="nearest"
+        ).reshape(shape)
     return out
 
 
@@ -84,12 +98,20 @@ class RingDescriptor:
         Rings too flat to describe (same rule as the luminance descriptor) get
         a zero descriptor and textured=False.
         """
-        gray = (rings.astype(np.float32) @ LUMA).reshape(len(rings), _RINGS, RING_ANGLES)
+        gray = (rings.astype(np.float32) @ LUMA).reshape(
+            len(rings), _RINGS, RING_ANGLES
+        )
         gray -= gray.mean(axis=(1, 2), keepdims=True)
-        textured = np.linalg.norm(gray.reshape(len(gray), -1), axis=1) > self.min_std * np.sqrt(_RINGS * RING_ANGLES)
-        mag = np.abs(np.fft.rfft(gray, axis=2)).reshape(len(gray), -1).astype(np.float32)
+        textured = np.linalg.norm(
+            gray.reshape(len(gray), -1), axis=1
+        ) > self.min_std * np.sqrt(_RINGS * RING_ANGLES)
+        mag = (
+            np.abs(np.fft.rfft(gray, axis=2)).reshape(len(gray), -1).astype(np.float32)
+        )
         norm = np.linalg.norm(mag, axis=1, keepdims=True)
-        mag = np.where(textured[:, None], mag / np.maximum(norm, 1e-12), 0.0).astype(np.float32)
+        mag = np.where(textured[:, None], mag / np.maximum(norm, 1e-12), 0.0).astype(
+            np.float32
+        )
         return mag, textured
 
 
@@ -105,7 +127,15 @@ def relative_angles(source: np.ndarray, target: np.ndarray) -> np.ndarray:
     cc = np.real(np.fft.ifft(np.conj(s) * t, axis=2)).sum(axis=1)
     k = cc.argmax(axis=1)
     rows = np.arange(len(k))
-    left, mid, right = cc[rows, (k - 1) % RING_ANGLES], cc[rows, k], cc[rows, (k + 1) % RING_ANGLES]
+    left, mid, right = (
+        cc[rows, (k - 1) % RING_ANGLES],
+        cc[rows, k],
+        cc[rows, (k + 1) % RING_ANGLES],
+    )
     curve = left - 2 * mid + right
-    step = np.where(np.abs(curve) > 1e-12, 0.5 * (left - right) / np.where(curve == 0, 1, curve), 0.0)
+    step = np.where(
+        np.abs(curve) > 1e-12,
+        0.5 * (left - right) / np.where(curve == 0, 1, curve),
+        0.0,
+    )
     return (k + step) * 2 * np.pi / RING_ANGLES

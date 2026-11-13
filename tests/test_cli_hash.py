@@ -50,7 +50,9 @@ def test_prints_hashes():
 
 
 def test_against_list(tmp_path):
-    hit = write_list(tmp_path, "pdq," + expected_pdq("bridge-1-original.jpg") + ",known-1")
+    hit = write_list(
+        tmp_path, "pdq," + expected_pdq("bridge-1-original.jpg") + ",known-1"
+    )
     result = run(ORIGINAL, "--algorithm", "pdq", "--against", hit)
     assert result.exit_code == 0, result.output
     assert "known-1" in result.output
@@ -64,7 +66,9 @@ def test_against_list(tmp_path):
 
 
 def test_thorough_matches_rotation(tmp_path):
-    only = write_list(tmp_path, "pdq," + expected_pdq("bridge-2-rotate-90.jpg") + ",rotated")
+    only = write_list(
+        tmp_path, "pdq," + expected_pdq("bridge-2-rotate-90.jpg") + ",rotated"
+    )
     plain = run(ORIGINAL, "--algorithm", "pdq", "--against", only)
     assert plain.exit_code == 0, plain.output
     assert "no match" in plain.output
@@ -75,7 +79,9 @@ def test_thorough_matches_rotation(tmp_path):
 
 
 def test_json_output(tmp_path):
-    lst = write_list(tmp_path, "pdq," + expected_pdq("bridge-1-original.jpg") + ",known-1")
+    lst = write_list(
+        tmp_path, "pdq," + expected_pdq("bridge-1-original.jpg") + ",known-1"
+    )
     out = tmp_path / "out.json"
     result = run(ORIGINAL, "--algorithm", "pdq", "--against", lst, "--json", str(out))
     assert result.exit_code == 0, result.output
@@ -154,6 +160,7 @@ def _nothing_installed(monkeypatch):
     import sys
 
     from splicetrail import hashing
+
     monkeypatch.setitem(sys.modules, "pdqhash", None)
     monkeypatch.setitem(sys.modules, "imagehash", None)
     monkeypatch.setattr(hashing, "_load_phash_lib", lambda: None)
@@ -201,7 +208,13 @@ def test_list_id_is_escaped(tmp_path):
 
 
 def test_json_path_checked_before_hashing(tmp_path):
-    result = run(ORIGINAL, "--algorithm", "pdq", "--json", str(tmp_path / "missing-dir" / "out.json"))
+    result = run(
+        ORIGINAL,
+        "--algorithm",
+        "pdq",
+        "--json",
+        str(tmp_path / "missing-dir" / "out.json"),
+    )
     assert result.exit_code != 0
     assert "Can't write" in result.output
     assert ORIGINAL not in result.output
@@ -220,7 +233,9 @@ def test_failed_run_leaves_json_output_alone(tmp_path):
 def test_json_parent_that_is_a_file_fails_early(tmp_path):
     not_a_folder = tmp_path / "file"
     not_a_folder.write_text("x")
-    result = run(ORIGINAL, "--algorithm", "pdq", "--json", str(not_a_folder / "out.json"))
+    result = run(
+        ORIGINAL, "--algorithm", "pdq", "--json", str(not_a_folder / "out.json")
+    )
     assert result.exit_code != 0
     assert "Can't write" in result.output
     assert ORIGINAL not in result.output

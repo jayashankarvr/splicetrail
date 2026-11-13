@@ -21,17 +21,21 @@ class TestSyntheticGenerator:
         s = make_recolored_splice(seed=1, image_size=80, fragment_size=24)
         x, y, w, h = s.bbox
         assert s.mask.sum() == w * h
-        assert s.mask[y:y + h, x:x + w].all()
+        assert s.mask[y : y + h, x : x + w].all()
 
     def test_splice_region_differs_from_host(self):
         # The tampered splice region should be the recolored donor fragment,
         # not the original host content there.
-        s = make_recolored_splice(seed=2, image_size=80, fragment_size=24, color_grade_strength=0.2)
+        s = make_recolored_splice(
+            seed=2, image_size=80, fragment_size=24, color_grade_strength=0.2
+        )
         assert s.tampered.shape == (80, 80, 3)
         assert s.color_M.shape == (3, 3) and s.color_b.shape == (3,)
 
     def test_zero_grade_is_identity_transform(self):
-        s = make_recolored_splice(seed=4, image_size=64, fragment_size=20, color_grade_strength=0.0)
+        s = make_recolored_splice(
+            seed=4, image_size=64, fragment_size=20, color_grade_strength=0.0
+        )
         np.testing.assert_allclose(s.color_M, np.eye(3))
         np.testing.assert_allclose(s.color_b, np.zeros(3))
 
@@ -43,15 +47,25 @@ class TestSyntheticGenerator:
     def test_splice_upscale_blurs_the_region(self):
         from splicetrail.scale import native_scale_fraction
 
-        sharp = make_recolored_splice(seed=12, image_size=128, fragment_size=64,
-                                      color_grade_strength=0.0, splice_upscale=1.0)
-        blur = make_recolored_splice(seed=12, image_size=128, fragment_size=64,
-                                     color_grade_strength=0.0, splice_upscale=2.0)
+        sharp = make_recolored_splice(
+            seed=12,
+            image_size=128,
+            fragment_size=64,
+            color_grade_strength=0.0,
+            splice_upscale=1.0,
+        )
+        blur = make_recolored_splice(
+            seed=12,
+            image_size=128,
+            fragment_size=64,
+            color_grade_strength=0.0,
+            splice_upscale=2.0,
+        )
         assert blur.params["splice_upscale"] == 2.0
         x, y, w, h = blur.bbox
         # the resized splice region has a lower native scale (is blurrier)
-        nf_blur = native_scale_fraction(blur.tampered[y:y + h, x:x + w])
-        nf_sharp = native_scale_fraction(sharp.tampered[y:y + h, x:x + w])
+        nf_blur = native_scale_fraction(blur.tampered[y : y + h, x : x + w])
+        nf_sharp = native_scale_fraction(sharp.tampered[y : y + h, x : x + w])
         assert nf_blur < nf_sharp
 
 
@@ -63,16 +77,20 @@ class TestMetrics:
         assert sc["iou"] == 1.0 and sc["f1"] == 1.0 and sc["mcc"] == 1.0
 
     def test_no_overlap(self):
-        a = np.zeros((10, 10), dtype=bool); a[0:3, 0:3] = True
-        b = np.zeros((10, 10), dtype=bool); b[7:10, 7:10] = True
+        a = np.zeros((10, 10), dtype=bool)
+        a[0:3, 0:3] = True
+        b = np.zeros((10, 10), dtype=bool)
+        b[7:10, 7:10] = True
         sc = localization_scores(a, b)
         assert sc["iou"] == 0.0 and sc["recall"] == 0.0
 
     def test_partial_overlap_iou(self):
-        gt = np.zeros((10, 10), dtype=bool); gt[0:4, 0:4] = True      # 16 px
-        pred = np.zeros((10, 10), dtype=bool); pred[0:4, 0:2] = True  # 8 px, all inside gt
+        gt = np.zeros((10, 10), dtype=bool)
+        gt[0:4, 0:4] = True  # 16 px
+        pred = np.zeros((10, 10), dtype=bool)
+        pred[0:4, 0:2] = True  # 8 px, all inside gt
         sc = localization_scores(pred, gt)
-        assert abs(sc["iou"] - 8 / 16) < 1e-9       # intersection 8, union 16
+        assert abs(sc["iou"] - 8 / 16) < 1e-9  # intersection 8, union 16
         assert abs(sc["precision"] - 1.0) < 1e-9
         assert abs(sc["recall"] - 0.5) < 1e-9
 
@@ -83,6 +101,7 @@ class TestMetrics:
 
     def test_shape_mismatch_raises(self):
         import pytest
+
         with pytest.raises(ValueError):
             localization_scores(np.zeros((4, 4), bool), np.zeros((5, 5), bool))
 

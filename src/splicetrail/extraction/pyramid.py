@@ -11,20 +11,22 @@ from splicetrail.extraction.patches import PatchExtractor
 @dataclass
 class PyramidLevel:
     """A single level of the image pyramid."""
-    level: int                    # 0 = original, 1 = half, etc.
-    scale: float                  # Scale factor (1.0, 0.5, 0.25, ...)
-    image: np.ndarray             # Scaled image
-    shape: Tuple[int, int]        # (height, width)
+
+    level: int  # 0 = original, 1 = half, etc.
+    scale: float  # Scale factor (1.0, 0.5, 0.25, ...)
+    image: np.ndarray  # Scaled image
+    shape: Tuple[int, int]  # (height, width)
 
 
 @dataclass
 class PyramidPatchCollection:
     """Patches extracted from a pyramid with level metadata."""
-    patches: np.ndarray           # shape: (N, size, size, 3)
-    coords: np.ndarray            # shape: (N, 2) - coords at pyramid level
-    original_coords: np.ndarray   # shape: (N, 2) - coords in original image
-    levels: np.ndarray            # shape: (N,) - which level each patch came from
-    scales: np.ndarray            # shape: (N,) - scale factor for each patch
+
+    patches: np.ndarray  # shape: (N, size, size, 3)
+    coords: np.ndarray  # shape: (N, 2) - coords at pyramid level
+    original_coords: np.ndarray  # shape: (N, 2) - coords in original image
+    levels: np.ndarray  # shape: (N,) - which level each patch came from
+    scales: np.ndarray  # shape: (N,) - scale factor for each patch
     entropy: Optional[np.ndarray] = None
 
 
@@ -85,12 +87,14 @@ class ImagePyramid:
                 pil_scaled = pil_img.resize((new_w, new_h), Image.Resampling.LANCZOS)
                 scaled = np.array(pil_scaled).astype(np.float32) / 255.0
 
-            levels.append(PyramidLevel(
-                level=i,
-                scale=scale,
-                image=scaled,
-                shape=(new_h, new_w),
-            ))
+            levels.append(
+                PyramidLevel(
+                    level=i,
+                    scale=scale,
+                    image=scaled,
+                    shape=(new_h, new_w),
+                )
+            )
 
         return levels
 
@@ -127,19 +131,27 @@ class ImagePyramid:
             # Transform coordinates back to original image space
             # coord_original = coord_level / scale
             # Use round instead of truncation to avoid off-by-one errors
-            original_coords = np.round(collection.coords / pyr_level.scale).astype(np.int32)
+            original_coords = np.round(collection.coords / pyr_level.scale).astype(
+                np.int32
+            )
 
             all_patches.append(collection.patches)
             all_coords.append(collection.coords)
             all_original_coords.append(original_coords)
-            all_levels.append(np.full(len(collection.patches), pyr_level.level, dtype=np.int32))
-            all_scales.append(np.full(len(collection.patches), pyr_level.scale, dtype=np.float32))
+            all_levels.append(
+                np.full(len(collection.patches), pyr_level.level, dtype=np.int32)
+            )
+            all_scales.append(
+                np.full(len(collection.patches), pyr_level.scale, dtype=np.float32)
+            )
             if collection.entropy is not None:
                 all_entropy.append(collection.entropy)
 
         if not all_patches:
             return PyramidPatchCollection(
-                patches=np.zeros((0, extractor.size, extractor.size, 3), dtype=np.float32),
+                patches=np.zeros(
+                    (0, extractor.size, extractor.size, 3), dtype=np.float32
+                ),
                 coords=np.zeros((0, 2), dtype=np.int32),
                 original_coords=np.zeros((0, 2), dtype=np.int32),
                 levels=np.array([], dtype=np.int32),

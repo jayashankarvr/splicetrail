@@ -41,8 +41,14 @@ def original():
 
 def test_constants():
     assert VARIANTS == (
-        "original", "rot90", "rot180", "rot270",
-        "flip_x", "flip_y", "flip_diag", "flip_antidiag",
+        "original",
+        "rot90",
+        "rot180",
+        "rot270",
+        "flip_x",
+        "flip_y",
+        "flip_diag",
+        "flip_antidiag",
     )
     assert DEFAULT_DISTANCE == {"pdq": 31, "phash": 10, "phash-lib": 10}
     assert "photodna" not in available_algorithms()
@@ -182,9 +188,16 @@ def _fake_hasher(value=0xABC, rc=0, seen=None):
 
 
 def test_phash_lib_formats_hex(original):
-    with mock.patch("splicetrail.hashing._load_phash_lib", return_value=_fake_hasher(0xABC)):
+    with mock.patch(
+        "splicetrail.hashing._load_phash_lib", return_value=_fake_hasher(0xABC)
+    ):
         (h,) = hash_image(original, ["phash-lib"])
-    assert (h.algorithm, h.hex, h.quality, h.variant) == ("phash-lib", "0000000000000abc", None, "original")
+    assert (h.algorithm, h.hex, h.quality, h.variant) == (
+        "phash-lib",
+        "0000000000000abc",
+        None,
+        "original",
+    )
 
 
 def test_phash_lib_dihedral(original):
@@ -195,9 +208,14 @@ def test_phash_lib_dihedral(original):
 
 def test_phash_lib_failure_and_temp_cleanup(original):
     seen = []
-    with mock.patch("splicetrail.hashing._load_phash_lib", return_value=_fake_hasher(seen=seen)):
+    with mock.patch(
+        "splicetrail.hashing._load_phash_lib", return_value=_fake_hasher(seen=seen)
+    ):
         hash_image(original, ["phash-lib"])
-    with mock.patch("splicetrail.hashing._load_phash_lib", return_value=_fake_hasher(rc=1, seen=seen)):
+    with mock.patch(
+        "splicetrail.hashing._load_phash_lib",
+        return_value=_fake_hasher(rc=1, seen=seen),
+    ):
         with pytest.raises(RuntimeError, match="libpHash"):
             hash_image(original, ["phash-lib"])
     assert len(seen) == 2
@@ -220,16 +238,23 @@ def test_phash_lib_mangled_symbol_fallback(fresh_loader, monkeypatch):
     monkeypatch.delenv("SPLICETRAIL_PHASH_LIB", raising=False)
     fn = _fake_hasher()
     lib = _FakeCDLL(_Z16ph_dct_imagehashPKcRm=fn)
-    with mock.patch("ctypes.util.find_library", return_value="libpHash.so.0"), mock.patch("ctypes.CDLL", return_value=lib):
+    with mock.patch(
+        "ctypes.util.find_library", return_value="libpHash.so.0"
+    ), mock.patch("ctypes.CDLL", return_value=lib):
         assert _load_phash_lib() is fn
         assert "phash-lib" in available_algorithms()
 
 
 def test_phash_lib_loaded_without_symbol(fresh_loader, original, monkeypatch):
     monkeypatch.delenv("SPLICETRAIL_PHASH_LIB", raising=False)
-    with mock.patch("ctypes.util.find_library", return_value="/usr/lib/libpHash.so.0"), mock.patch("ctypes.CDLL", return_value=_FakeCDLL()):
+    with mock.patch(
+        "ctypes.util.find_library", return_value="/usr/lib/libpHash.so.0"
+    ), mock.patch("ctypes.CDLL", return_value=_FakeCDLL()):
         assert "phash-lib" not in available_algorithms()
-        with pytest.raises(DependencyError, match=r"/usr/lib/libpHash.so.0.*doesn't export ph_dct_imagehash"):
+        with pytest.raises(
+            DependencyError,
+            match=r"/usr/lib/libpHash.so.0.*doesn't export ph_dct_imagehash",
+        ):
             hash_image(original, ["phash-lib"])
 
 
@@ -306,7 +331,9 @@ def test_edited_copies_within_distance(robustness):
         if edit not in REQUIRED_EDITS:
             continue
         if (algo, photo, edit) in _KNOWN_MISSES:
-            assert d > DEFAULT_DISTANCE[algo], "known miss now passes; drop it from _KNOWN_MISSES"
+            assert (
+                d > DEFAULT_DISTANCE[algo]
+            ), "known miss now passes; drop it from _KNOWN_MISSES"
             continue
         assert d <= DEFAULT_DISTANCE[algo], (algo, photo, edit, d)
 
@@ -341,7 +368,9 @@ def test_pixel_types_keep_their_scale():
         if top == 255:
             forms.append(pixels.astype(np.float64))  # 0..255 floats
         for form in forms:
-            np.testing.assert_array_equal(_as_rgb(form), pixels, err_msg=str(form.dtype))
+            np.testing.assert_array_equal(
+                _as_rgb(form), pixels, err_msg=str(form.dtype)
+            )
     np.testing.assert_array_equal(_as_rgb(np.ones((4, 4, 3), dtype=bool)), 255)
 
 
@@ -358,8 +387,13 @@ def test_dark_frame_quality_does_not_depend_on_type():
 def test_unreadable_pixel_values_refused():
     from splicetrail.hashing import _as_rgb
 
-    bad = [np.full((4, 4, 3), -1.0), np.full((4, 4, 3), np.nan), np.full((4, 4, 3), 300.0),
-           np.full((4, 4, 3), 300, dtype=np.int32), np.full((4, 4, 3), -1, dtype=np.int16)]
+    bad = [
+        np.full((4, 4, 3), -1.0),
+        np.full((4, 4, 3), np.nan),
+        np.full((4, 4, 3), 300.0),
+        np.full((4, 4, 3), 300, dtype=np.int32),
+        np.full((4, 4, 3), -1, dtype=np.int16),
+    ]
     for image in bad:
         with pytest.raises(ValueError):
             _as_rgb(image)

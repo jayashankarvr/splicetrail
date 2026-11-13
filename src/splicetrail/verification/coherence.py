@@ -13,11 +13,12 @@ if TYPE_CHECKING:
 @dataclass
 class CoherentRegion:
     """A cluster of matches that agree on one (dx, dy) translation."""
-    offset: Tuple[int, int]          # (dx, dy), in the matched target level's pixels
-    matches: List["Match"]           # Matches in this cluster
+
+    offset: Tuple[int, int]  # (dx, dy), in the matched target level's pixels
+    matches: List["Match"]  # Matches in this cluster
     source_bbox: Tuple[int, int, int, int]  # (x, y, w, h) in source
     target_bbox: Tuple[int, int, int, int]  # (x, y, w, h) in target
-    confidence: float                # mean probability * log2(size + 1), a ranking heuristic
+    confidence: float  # mean probability * log2(size + 1), a ranking heuristic
     image_id: str = ""
     # Filled in by region-level verification (ForensicsEngine.match): one color
     # transform fitted over every pixel in the region, the a-contrario
@@ -88,19 +89,30 @@ class SpatialCoherenceVerifier:
         if len(matches) < self.min_cluster_size:
             return []
         group_of: Dict[Tuple[str, float], int] = {}
-        groups = [group_of.setdefault((m.image_id, getattr(m, "target_scale", 1.0)), len(group_of)) for m in matches]
+        groups = [
+            group_of.setdefault(
+                (m.image_id, getattr(m, "target_scale", 1.0)), len(group_of)
+            )
+            for m in matches
+        ]
         offsets = np.array([match_offset(m) for m in matches], dtype=np.int64)
         regions = [
             make_region(peak, [matches[i] for i in rows], matches[rows[0]].image_id)
-            for peak, rows in cluster_offsets(offsets, groups, self.offset_tolerance, self.min_cluster_size)
+            for peak, rows in cluster_offsets(
+                offsets, groups, self.offset_tolerance, self.min_cluster_size
+            )
         ]
         regions.sort(key=lambda r: r.confidence, reverse=True)
         return regions
 
 
 def cluster_offsets(
-    offsets: np.ndarray, groups: Sequence[int], tol: int, min_size: int,
-    scores: Optional[np.ndarray] = None, limit: Optional[int] = None,
+    offsets: np.ndarray,
+    groups: Sequence[int],
+    tol: int,
+    min_size: int,
+    scores: Optional[np.ndarray] = None,
+    limit: Optional[int] = None,
 ) -> List[Tuple[Tuple[int, int], np.ndarray]]:
     """Peak clustering of match offsets, separately within each group.
 
@@ -127,7 +139,7 @@ def cluster_offsets(
         return []
     _, first, group_idx = np.unique(groups, return_index=True, return_inverse=True)
     d = np.arange(-tol, tol + 1)
-    found = []   # (size, score sum, peak, cell list, per-group cell -> rows lookup)
+    found = []  # (size, score sum, peak, cell list, per-group cell -> rows lookup)
     for g in np.argsort(first):
         rows = np.nonzero(group_idx == g)[0]
         if len(rows) < min_size:
@@ -137,7 +149,9 @@ def cluster_offsets(
         lo = off.min(axis=0) - tol
         span_y = int(off[:, 1].max() - lo[1]) + tol + 1
         keys = (off[:, 0] - lo[0]) * span_y + (off[:, 1] - lo[1])
-        cells, inverse, counts = np.unique(keys, return_inverse=True, return_counts=True)
+        cells, inverse, counts = np.unique(
+            keys, return_inverse=True, return_counts=True
+        )
         wanted = cells[:, None] + (d[:, None] * span_y + d[None, :]).ravel()[None, :]
         pos = np.minimum(np.searchsorted(cells, wanted), len(cells) - 1)
         nbr = np.where(cells[pos] == wanted, pos, -1)
@@ -151,8 +165,11 @@ def cluster_offsets(
         claimed = [False] * len(cells)
         by_cell = rows[np.argsort(inverse, kind="stable")]
         start = np.concatenate([[0], np.cumsum(counts)]).tolist()
-        cell_score = (np.bincount(inverse.reshape(-1), weights=np.asarray(scores)[rows]).tolist()
-                      if scores is not None else None)
+        cell_score = (
+            np.bincount(inverse.reshape(-1), weights=np.asarray(scores)[rows]).tolist()
+            if scores is not None
+            else None
+        )
         lookup = (by_cell, start)
         for peak in order.tolist():
             if claimed[peak]:
@@ -164,14 +181,20 @@ def cluster_offsets(
                 claimed[c] = True
             px, py = divmod(int(cells[peak]), span_y)
             size = sum(count_list[c] for c in window)
-            score = sum(cell_score[c] for c in window) if cell_score is not None else 0.0
-            found.append((size, score, (px + int(lo[0]), py + int(lo[1])), window, lookup))
+            score = (
+                sum(cell_score[c] for c in window) if cell_score is not None else 0.0
+            )
+            found.append(
+                (size, score, (px + int(lo[0]), py + int(lo[1])), window, lookup)
+            )
 
     if limit is not None:
-        rank = sorted(range(len(found)), key=lambda i: (-found[i][0], -found[i][1] / found[i][0]))
+        rank = sorted(
+            range(len(found)), key=lambda i: (-found[i][0], -found[i][1] / found[i][0])
+        )
         found = [found[i] for i in rank[:limit]]
     return [
-        (peak, np.concatenate([by_cell[start[c]:start[c + 1]] for c in window]))
+        (peak, np.concatenate([by_cell[start[c] : start[c + 1]] for c in window]))
         for _, _, peak, window, (by_cell, start) in found
     ]
 
@@ -182,7 +205,10 @@ def _wrap(angle: np.ndarray) -> np.ndarray:
 
 def _rotate(points: np.ndarray, theta: float) -> np.ndarray:
     c, s = np.cos(theta), np.sin(theta)
-    return np.stack([c * points[:, 0] - s * points[:, 1], s * points[:, 0] + c * points[:, 1]], axis=1)
+    return np.stack(
+        [c * points[:, 0] - s * points[:, 1], s * points[:, 0] + c * points[:, 1]],
+        axis=1,
+    )
 
 
 def find_rigid_regions(
@@ -224,11 +250,17 @@ def find_rigid_regions(
         # Matches sorted by angle (with a wrapped copy at both ends), so each seed
         # only looks at the ~1/12 of matches whose angle can agree with it.
         order = np.argsort(rot)
-        ext_rot = np.concatenate([rot[order] - 2 * np.pi, rot[order], rot[order] + 2 * np.pi])
+        ext_rot = np.concatenate(
+            [rot[order] - 2 * np.pi, rot[order], rot[order] + 2 * np.pi]
+        )
         ext_idx = np.concatenate([order, order, order])
 
-        def agreeing(seed: int, theta: float, shift: np.ndarray, slack: float) -> np.ndarray:
-            lo, hi = np.searchsorted(ext_rot, [theta - angle_tolerance, theta + angle_tolerance + 1e-12])
+        def agreeing(
+            seed: int, theta: float, shift: np.ndarray, slack: float
+        ) -> np.ndarray:
+            lo, hi = np.searchsorted(
+                ext_rot, [theta - angle_tolerance, theta + angle_tolerance + 1e-12]
+            )
             # A window narrower than a full turn never visits a match twice.
             cand = ext_idx[lo:hi]
             cand = cand[alive[cand]]
@@ -238,9 +270,11 @@ def find_rigid_regions(
         while alive.sum() >= min_cluster_size and len(regions) < max_regions:
             remaining = np.nonzero(alive)[0]
             best = None
-            for seed in rng.choice(remaining, min(seeds, len(remaining)), replace=False):
+            for seed in rng.choice(
+                remaining, min(seeds, len(remaining)), replace=False
+            ):
                 theta = rot[seed]
-                shift = tgt[seed] - _rotate(src[seed:seed + 1], theta)[0]
+                shift = tgt[seed] - _rotate(src[seed : seed + 1], theta)[0]
                 members = agreeing(seed, theta, shift, 2 * tol + 2)
                 if best is None or len(members) > len(best):
                     best = members
@@ -249,13 +283,22 @@ def find_rigid_regions(
             # Least-squares rotation of the agreeing centres, then the final inliers.
             a = src[best] - src[best].mean(axis=0)
             b = tgt[best] - tgt[best].mean(axis=0)
-            theta = float(np.arctan2((a[:, 0] * b[:, 1] - a[:, 1] * b[:, 0]).sum(), (a * b).sum()))
-            shift = tgt[best].mean(axis=0) - _rotate(src[best].mean(axis=0)[None, :], theta)[0]
+            theta = float(
+                np.arctan2((a[:, 0] * b[:, 1] - a[:, 1] * b[:, 0]).sum(), (a * b).sum())
+            )
+            shift = (
+                tgt[best].mean(axis=0)
+                - _rotate(src[best].mean(axis=0)[None, :], theta)[0]
+            )
             inliers = agreeing(-1, theta, shift, tol)
             if len(inliers) < min_cluster_size:
                 alive[best] = False
                 continue
-            region = make_region((int(round(shift[0])), int(round(shift[1]))), [group[i] for i in inliers], image_id)
+            region = make_region(
+                (int(round(shift[0])), int(round(shift[1]))),
+                [group[i] for i in inliers],
+                image_id,
+            )
             region.rotation = theta
             regions.append(region)
             alive[inliers] = False
@@ -264,7 +307,9 @@ def find_rigid_regions(
     return regions
 
 
-def make_region(offset: Tuple[int, int], cluster: List, image_id: str = "") -> CoherentRegion:
+def make_region(
+    offset: Tuple[int, int], cluster: List, image_id: str = ""
+) -> CoherentRegion:
     """Build a region (bounding boxes, confidence) from a list of matches."""
     sx = [m.source_coord[0] for m in cluster]
     sy = [m.source_coord[1] for m in cluster]
@@ -277,8 +322,18 @@ def make_region(offset: Tuple[int, int], cluster: List, image_id: str = "") -> C
     return CoherentRegion(
         offset=offset,
         matches=cluster,
-        source_bbox=(min(sx), min(sy), max(sx) - min(sx) + size, max(sy) - min(sy) + size),
-        target_bbox=(min(tx), min(ty), max(tx) - min(tx) + target_size, max(ty) - min(ty) + target_size),
+        source_bbox=(
+            min(sx),
+            min(sy),
+            max(sx) - min(sx) + size,
+            max(sy) - min(sy) + size,
+        ),
+        target_bbox=(
+            min(tx),
+            min(ty),
+            max(tx) - min(tx) + target_size,
+            max(ty) - min(ty) + target_size,
+        ),
         confidence=avg_prob * float(np.log2(len(cluster) + 1)),
         image_id=image_id,
     )

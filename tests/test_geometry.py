@@ -6,7 +6,11 @@ import pytest
 from splicetrail import Config, ForensicsEngine
 from splicetrail.aggregation.heatmap import Match
 from splicetrail.bench.synthetic import make_copy_move, make_negative_pair
-from splicetrail.extraction.orientation import RingDescriptor, relative_angles, ring_samples
+from splicetrail.extraction.orientation import (
+    RingDescriptor,
+    relative_angles,
+    ring_samples,
+)
 from splicetrail.verification.coherence import find_rigid_regions
 
 
@@ -52,20 +56,30 @@ class TestRings:
     def test_exact_rotation_keeps_descriptor_and_measures_angle(self):
         from scipy.ndimage import gaussian_filter
 
-        img = gaussian_filter(np.random.RandomState(0).rand(80, 80, 3), (1.5, 1.5, 0)).astype(np.float32)
-        rot = np.ascontiguousarray(np.rot90(img, k=-1))   # a quarter turn clockwise on screen
+        img = gaussian_filter(
+            np.random.RandomState(0).rand(80, 80, 3), (1.5, 1.5, 0)
+        ).astype(np.float32)
+        rot = np.ascontiguousarray(
+            np.rot90(img, k=-1)
+        )  # a quarter turn clockwise on screen
         s = 5
         coords = np.array([[30, 30], [40, 22], [25, 45]])
         centers = coords + (s - 1) / 2
         rot_coords = np.stack([79 - centers[:, 1], centers[:, 0]], 1) - (s - 1) / 2
         a, b = ring_samples(img, coords, s), ring_samples(rot, rot_coords, s)
         desc = RingDescriptor(s)
-        np.testing.assert_allclose(desc.compute_batch(a)[0], desc.compute_batch(b)[0], atol=1e-4)
+        np.testing.assert_allclose(
+            desc.compute_batch(a)[0], desc.compute_batch(b)[0], atol=1e-4
+        )
         gray = lambda r: r @ np.array([0.299, 0.587, 0.114], np.float32)
         angle = relative_angles(gray(a), gray(b))
-        np.testing.assert_allclose(np.angle(np.exp(1j * (angle - np.pi / 2))), 0, atol=1e-3)
+        np.testing.assert_allclose(
+            np.angle(np.exp(1j * (angle - np.pi / 2))), 0, atol=1e-3
+        )
         # Read at the measured angle, the target rings line up with the source.
-        np.testing.assert_allclose(ring_samples(rot, rot_coords, s, phase=angle), a, atol=1e-3)
+        np.testing.assert_allclose(
+            ring_samples(rot, rot_coords, s, phase=angle), a, atol=1e-3
+        )
 
 
 class TestRigidClustering:
@@ -79,10 +93,27 @@ class TestRigidClustering:
             cx, cy = x + 2, y + 2
             tx, ty = c * cx - s * cy + 100, s * cx + c * cy + 50
             angle = (theta + rng.normal(0, 0.05) + np.pi) % (2 * np.pi) - np.pi
-            matches.append(Match((int(x), int(y)), (int(round(tx - 2)), int(round(ty - 2))), 5, 0.9, "a", rotation=float(angle)))
+            matches.append(
+                Match(
+                    (int(x), int(y)),
+                    (int(round(tx - 2)), int(round(ty - 2))),
+                    5,
+                    0.9,
+                    "a",
+                    rotation=float(angle),
+                )
+            )
         for _ in range(40):
-            matches.append(Match(tuple(rng.integers(0, 90, 2).tolist()), tuple(rng.integers(0, 150, 2).tolist()),
-                                 5, 0.9, "a", rotation=float(rng.uniform(-3, 3))))
+            matches.append(
+                Match(
+                    tuple(rng.integers(0, 90, 2).tolist()),
+                    tuple(rng.integers(0, 150, 2).tolist()),
+                    5,
+                    0.9,
+                    "a",
+                    rotation=float(rng.uniform(-3, 3)),
+                )
+            )
         best = find_rigid_regions(matches)[0]
         assert len(best.matches) == 30
         assert np.degrees(best.rotation) == pytest.approx(170, abs=1)
@@ -122,7 +153,9 @@ class TestMirroredCopies:
         engine = ForensicsEngine(Config(flip_invariant=True))
         engine.index_target(donor, "d")
         result = engine.match(tampered)
-        region = build_report(result=result, config=engine.config)["result"]["coherent_regions"][0]
+        region = build_report(result=result, config=engine.config)["result"][
+            "coherent_regions"
+        ][0]
         assert region["mirrored"] and region["offset"] is None
 
     def test_heatmap_falls_back_to_matches_without_regions(self):
@@ -136,10 +169,14 @@ class TestMirroredCopies:
 
     def test_mirrored_search_counts_its_tests(self):
         donor, tampered, _ = _mirrored_splice()
-        plain, flip = ForensicsEngine(Config(flip_invariant=False)), ForensicsEngine(Config(flip_invariant=True))
+        plain, flip = ForensicsEngine(Config(flip_invariant=False)), ForensicsEngine(
+            Config(flip_invariant=True)
+        )
         for engine in (plain, flip):
             engine.index_target(donor, "d")
-        assert flip.match(tampered).stats["n_tests"] == pytest.approx(2 * plain.match(tampered).stats["n_tests"])
+        assert flip.match(tampered).stats["n_tests"] == pytest.approx(
+            2 * plain.match(tampered).stats["n_tests"]
+        )
 
 
 class TestTargetStorage:
@@ -148,7 +185,9 @@ class TestTargetStorage:
         image = (np.random.RandomState(0).rand(64, 64, 3) * 255).astype(np.uint8)
         engine.index_target(image, "a")
         target = engine._targets["a"]
-        assert target.levels[1.0].dtype == np.uint8 and np.array_equal(target.levels[1.0], image)
+        assert target.levels[1.0].dtype == np.uint8 and np.array_equal(
+            target.levels[1.0], image
+        )
 
 
 class TestQueryScales:
@@ -159,7 +198,9 @@ class TestQueryScales:
 
         rng = np.random.RandomState(4)
         donor, host = _textured_image(rng, 128, 128), _textured_image(rng, 128, 128)
-        fragment = np.asarray(Image.fromarray(donor[40:72, 40:72]).resize((48, 48), Image.BICUBIC))
+        fragment = np.asarray(
+            Image.fromarray(donor[40:72, 40:72]).resize((48, 48), Image.BICUBIC)
+        )
         tampered = host.copy()
         tampered[60:108, 20:68] = fragment
         mask = np.zeros((128, 128), bool)
@@ -169,10 +210,15 @@ class TestQueryScales:
         plain.index_target(donor, "d")
         assert _iou(plain.match(tampered).localization.mask, mask) < 0.2
 
-        scaled = ForensicsEngine(Config(flip_invariant=False, query_scales=[1.0, 0.75, 0.5]))
+        scaled = ForensicsEngine(
+            Config(flip_invariant=False, query_scales=[1.0, 0.75, 0.5])
+        )
         scaled.index_target(donor, "d")
         result = scaled.match(tampered)
-        assert result.significant_regions and result.significant_regions[0].source_scale < 1.0
+        assert (
+            result.significant_regions
+            and result.significant_regions[0].source_scale < 1.0
+        )
         assert _iou(result.localization.mask, mask) > 0.5
 
     def test_query_scales_validated(self):
@@ -189,7 +235,14 @@ class TestSymmetricObjects:
     def _region(self, src, tgt):
         from splicetrail.verification.coherence import CoherentRegion
 
-        return CoherentRegion(offset=(0, 0), matches=[], source_bbox=src, target_bbox=tgt, confidence=0.0, mirrored=True)
+        return CoherentRegion(
+            offset=(0, 0),
+            matches=[],
+            source_bbox=src,
+            target_bbox=tgt,
+            confidence=0.0,
+            mirrored=True,
+        )
 
     def test_halves_meeting_at_an_axis_are_a_symmetric_object(self):
         from splicetrail.engine import _halves_touch
@@ -200,9 +253,15 @@ class TestSymmetricObjects:
     def test_mirrored_copy_elsewhere_is_kept(self):
         from splicetrail.engine import _halves_touch
 
-        assert not _halves_touch(self._region((10, 10, 40, 40), (120, 15, 40, 40)), 10)   # far apart
-        assert not _halves_touch(self._region((10, 10, 40, 40), (52, 90, 40, 40)), 10)    # adjacent column, other rows
-        assert not _halves_touch(self._region((10, 10, 40, 40), (55, 22, 40, 40)), 10)    # adjacent, shifted 12 px down
+        assert not _halves_touch(
+            self._region((10, 10, 40, 40), (120, 15, 40, 40)), 10
+        )  # far apart
+        assert not _halves_touch(
+            self._region((10, 10, 40, 40), (52, 90, 40, 40)), 10
+        )  # adjacent column, other rows
+        assert not _halves_touch(
+            self._region((10, 10, 40, 40), (55, 22, 40, 40)), 10
+        )  # adjacent, shifted 12 px down
 
     def test_symmetric_image_has_no_copy_move(self):
         rng = np.random.RandomState(0)
@@ -255,7 +314,9 @@ class TestConnectedParts:
 
         calls = []
         real = eng._connected_parts
-        monkeypatch.setattr(eng, "_connected_parts", lambda *a: calls.append(1) or real(*a))
+        monkeypatch.setattr(
+            eng, "_connected_parts", lambda *a: calls.append(1) or real(*a)
+        )
         ForensicsEngine().match_self(make_copy_move(seed=1).tampered)
         assert not calls
 
@@ -266,7 +327,9 @@ class TestConnectedParts:
         camera = np.repeat(skimage.camera()[:512, :512, None], 3, axis=2)
         engine = ForensicsEngine()
         engine.index_target(camera, "camera")
-        assert not engine.match(skimage.astronaut()[:512, :512], return_heatmap=False).significant_regions
+        assert not engine.match(
+            skimage.astronaut()[:512, :512], return_heatmap=False
+        ).significant_regions
 
 
 class TestRotationMode:
@@ -283,10 +346,15 @@ class TestRotationMode:
     def test_rotated_splice_found_with_its_turn(self):
         from PIL import Image
 
-        donor, host = self._photo("astronaut")[100:260, 100:260], self._photo("coffee")[100:260, 100:260]
+        donor, host = (
+            self._photo("astronaut")[100:260, 100:260],
+            self._photo("coffee")[100:260, 100:260],
+        )
         window = self._photo("astronaut")[130:210, 130:210]
         tampered = host.copy()
-        tampered[60:108, 50:98] = np.asarray(Image.fromarray(window).rotate(50, resample=Image.BICUBIC))[16:64, 16:64]
+        tampered[60:108, 50:98] = np.asarray(
+            Image.fromarray(window).rotate(50, resample=Image.BICUBIC)
+        )[16:64, 16:64]
         mask = np.zeros(tampered.shape[:2], bool)
         mask[60:108, 50:98] = True
         engine = ForensicsEngine(Config(rotation_invariant=True, flip_invariant=False))
@@ -299,14 +367,19 @@ class TestRotationMode:
         # Regions cover the rings' footprint, so they reach close to the fragment's edges.
         assert _iou(result.localization.mask, mask) > 0.6
 
-    @pytest.mark.xfail(reason="copy-move's repeated-texture guard compares translation offsets, "
-                              "which a rotated copy spreads out; being worked on", strict=False)
+    @pytest.mark.xfail(
+        reason="copy-move's repeated-texture guard compares translation offsets, "
+        "which a rotated copy spreads out; being worked on",
+        strict=False,
+    )
     def test_rotated_copy_move_found(self):
         from PIL import Image
 
         image = self._photo("astronaut")[80:272, 80:272].copy()
         window = image[10:90, 10:90]
-        image[120:168, 120:168] = np.asarray(Image.fromarray(window).rotate(70, resample=Image.BICUBIC))[16:64, 16:64]
+        image[120:168, 120:168] = np.asarray(
+            Image.fromarray(window).rotate(70, resample=Image.BICUBIC)
+        )[16:64, 16:64]
         result = ForensicsEngine(Config(rotation_invariant=True)).match_self(image)
         assert result.significant_regions
 
@@ -315,15 +388,23 @@ class TestRotationMode:
         yy, xx = np.mgrid[:200, :200]
         r = np.hypot(xx - 100, yy - 100)
         profile = np.interp(r, np.arange(0, 80, 4), rng.rand(20))
-        img = np.where(r < 70, profile, 0.5)[..., None] * np.array([0.9, 0.8, 0.7]) + rng.normal(0, 0.01, (200, 200, 3))
+        img = np.where(r < 70, profile, 0.5)[..., None] * np.array(
+            [0.9, 0.8, 0.7]
+        ) + rng.normal(0, 0.01, (200, 200, 3))
         img = (np.clip(img, 0, 1) * 255).astype(np.uint8)
-        assert not ForensicsEngine(Config(rotation_invariant=True)).match_self(img).significant_regions
+        assert (
+            not ForensicsEngine(Config(rotation_invariant=True))
+            .match_self(img)
+            .significant_regions
+        )
 
     def test_unrelated_pair_stays_quiet(self):
         negative = make_negative_pair(seed=203)
         engine = ForensicsEngine(Config(rotation_invariant=True))
         engine.index_target(negative.donor, "d")
-        assert not engine.match(negative.tampered, return_heatmap=False).significant_regions
+        assert not engine.match(
+            negative.tampered, return_heatmap=False
+        ).significant_regions
 
     def test_bundle_from_another_descriptor_is_refused(self, tmp_path):
         from splicetrail.exceptions import IndexStoreError
@@ -336,7 +417,9 @@ class TestRotationMode:
         import json
 
         state = json.loads(meta.read_text())
-        state["descriptor"] = "LuminanceDescriptor"   # what an older rotation-mode bundle used
+        state["descriptor"] = (
+            "LuminanceDescriptor"  # what an older rotation-mode bundle used
+        )
         meta.write_text(json.dumps(state))
         with pytest.raises(IndexStoreError):
             ForensicsEngine.load(str(tmp_path / "rot"))
@@ -355,8 +438,13 @@ class TestThorough:
         out = {}
         for kind in ("mirrored", "rotated"):
             window = donor_full[130:210, 130:210]
-            piece = window[16:64, 16:64][:, ::-1] if kind == "mirrored" else \
-                np.asarray(Image.fromarray(window).rotate(50, resample=Image.BICUBIC))[16:64, 16:64]
+            piece = (
+                window[16:64, 16:64][:, ::-1]
+                if kind == "mirrored"
+                else np.asarray(
+                    Image.fromarray(window).rotate(50, resample=Image.BICUBIC)
+                )[16:64, 16:64]
+            )
             tampered = host[100:260, 100:260].copy()
             tampered[60:108, 50:98] = piece
             out[kind] = tampered
@@ -378,10 +466,16 @@ class TestThorough:
         plain = engine._search(tampered["mirrored"], None, False, 0.0)
         rotated = engine._rotated.match(tampered["mirrored"], None, False, 0.0)
         combined = engine.match(tampered["mirrored"], return_heatmap=False)
-        assert combined.stats["n_tests"] == pytest.approx(plain.stats["n_tests"] + rotated.stats["n_tests"])
-        best = min(r.log10_nfa for r in plain.coherent_regions + rotated.coherent_regions)
+        assert combined.stats["n_tests"] == pytest.approx(
+            plain.stats["n_tests"] + rotated.stats["n_tests"]
+        )
+        best = min(
+            r.log10_nfa for r in plain.coherent_regions + rotated.coherent_regions
+        )
         # Each region pays for the second search: its NFA doubles.
-        assert combined.coherent_regions[0].log10_nfa == pytest.approx(best + np.log10(2))
+        assert combined.coherent_regions[0].log10_nfa == pytest.approx(
+            best + np.log10(2)
+        )
 
     def test_one_splice_is_one_region(self):
         # The scale passes and the rotation search all find a plain splice; it's reported once.
@@ -390,13 +484,18 @@ class TestThorough:
         sample = make_recolored_splice(seed=3)
         engine = ForensicsEngine(Config(thorough=True))
         engine.index_target(sample.donor, "d")
-        assert len(engine.match(sample.tampered, return_heatmap=False).significant_regions) == 1
+        assert (
+            len(engine.match(sample.tampered, return_heatmap=False).significant_regions)
+            == 1
+        )
 
     def test_unrelated_pair_stays_quiet(self):
         negative = make_negative_pair(seed=205)
         engine = ForensicsEngine(Config(thorough=True))
         engine.index_target(negative.donor, "d")
-        assert not engine.match(negative.tampered, return_heatmap=False).significant_regions
+        assert not engine.match(
+            negative.tampered, return_heatmap=False
+        ).significant_regions
 
     def test_eviction_keeps_both_indexes_in_step(self):
         engine = ForensicsEngine(Config(thorough=True, max_targets=2))
@@ -404,7 +503,9 @@ class TestThorough:
             engine.index_target(make_negative_pair(seed=210 + i).donor, f"t{i}")
         assert engine.target_ids == engine._rotated.target_ids == ["t2", "t3"]
 
-    def test_older_bundle_loads_with_thorough_in_the_environment(self, tmp_path, monkeypatch):
+    def test_older_bundle_loads_with_thorough_in_the_environment(
+        self, tmp_path, monkeypatch
+    ):
         import json
 
         engine = ForensicsEngine()
@@ -412,7 +513,7 @@ class TestThorough:
         engine.save(str(tmp_path / "old"))
         meta = tmp_path / "old.engine.json"
         state = json.loads(meta.read_text())
-        del state["config"]["thorough"]          # written before thorough existed
+        del state["config"]["thorough"]  # written before thorough existed
         meta.write_text(json.dumps(state))
         monkeypatch.setenv("SPLICETRAIL_THOROUGH", "true")
         assert not ForensicsEngine.load(str(tmp_path / "old")).config.thorough
@@ -446,6 +547,8 @@ class TestThorough:
             real(self, config)
 
         monkeypatch.setattr(ForensicsEngine, "__init__", spy)
-        ForensicsEngine(Config(thorough=True)).match_self(make_copy_move(seed=1).tampered)
+        ForensicsEngine(Config(thorough=True)).match_self(
+            make_copy_move(seed=1).tampered
+        )
         # The thorough engine, its rotation helper, then copy-move's engine without one.
         assert calls == [False, True, False]

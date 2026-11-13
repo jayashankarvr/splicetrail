@@ -32,7 +32,11 @@ def localization_scores(pred_mask: np.ndarray, gt_mask: np.ndarray) -> Dict[str,
     iou = 1.0 if union == 0 else tp / union
     precision = 1.0 if (tp + fp) == 0 else tp / (tp + fp)
     recall = 1.0 if (tp + fn) == 0 else tp / (tp + fn)
-    f1 = 0.0 if (precision + recall) == 0 else 2 * precision * recall / (precision + recall)
+    f1 = (
+        0.0
+        if (precision + recall) == 0
+        else 2 * precision * recall / (precision + recall)
+    )
 
     # Matthews correlation coefficient, with the standard 0-denominator guard.
     denom = np.sqrt(float(tp + fp) * (tp + fn) * (tn + fp) * (tn + fn))

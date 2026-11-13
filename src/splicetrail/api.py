@@ -13,6 +13,7 @@ try:
     from fastapi import FastAPI, File, UploadFile, HTTPException, Query
     from fastapi.concurrency import run_in_threadpool
     from pydantic import BaseModel
+
     FASTAPI_AVAILABLE = True
 except ImportError:
     FASTAPI_AVAILABLE = False
@@ -34,26 +35,31 @@ Image.MAX_IMAGE_PIXELS = MAX_IMAGE_PIXELS
 
 class MatchCoord(BaseModel):
     """Coordinate pair."""
+
     x: int
     y: int
 
 
 class MatchInfo(BaseModel):
     """Information about a single match."""
+
     source_coord: MatchCoord
     target_coord: MatchCoord
     patch_size: int
-    fit_p_value: float   # per-patch goodness of fit, not a match probability
+    fit_p_value: float  # per-patch goodness of fit, not a match probability
     image_id: str
 
 
 class CoherentRegionInfo(BaseModel):
     """Information about a coherent region."""
-    offset: Optional[MatchCoord] = None   # null when mirrored or rescaled (see the bboxes)
+
+    offset: Optional[MatchCoord] = (
+        None  # null when mirrored or rescaled (see the bboxes)
+    )
     image_id: str
     num_matches: int
     confidence: float
-    log10_nfa: Optional[float] = None   # < 0: expected less than once by chance
+    log10_nfa: Optional[float] = None  # < 0: expected less than once by chance
     significant: bool
     source_bbox: Dict[str, int]
     target_bbox: Dict[str, int]
@@ -64,6 +70,7 @@ class CoherentRegionInfo(BaseModel):
 
 class MatchResponse(BaseModel):
     """Response from match endpoint."""
+
     success: bool
     detected: bool
     best_match: Optional[MatchInfo] = None
@@ -75,6 +82,7 @@ class MatchResponse(BaseModel):
 
 class IndexResponse(BaseModel):
     """Response from index endpoint."""
+
     success: bool
     image_id: str
     patches_indexed: int
@@ -99,7 +107,7 @@ async def validate_uploaded_image(file: UploadFile) -> Tuple[np.ndarray, float]:
     if len(contents) > MAX_FILE_SIZE:
         raise HTTPException(
             status_code=413,
-            detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)}MB"
+            detail=f"File too large. Maximum size is {MAX_FILE_SIZE // (1024*1024)}MB",
         )
 
     # Validate image format and load
@@ -110,18 +118,22 @@ async def validate_uploaded_image(file: UploadFile) -> Tuple[np.ndarray, float]:
         if image.format not in ALLOWED_IMAGE_FORMATS:
             raise HTTPException(
                 status_code=400,
-                detail=f"Unsupported format: {image.format}. Allowed: {ALLOWED_IMAGE_FORMATS}"
+                detail=f"Unsupported format: {image.format}. Allowed: {ALLOWED_IMAGE_FORMATS}",
             )
 
         # Check dimensions (prevent decompression bombs)
         if image.size[0] * image.size[1] > MAX_IMAGE_PIXELS:
             raise HTTPException(
                 status_code=413,
-                detail=f"Image too large. Maximum {MAX_IMAGE_PIXELS} pixels"
+                detail=f"Image too large. Maximum {MAX_IMAGE_PIXELS} pixels",
             )
 
         # Convert to RGB
-        jpeg_sigma = (sigma_from_tables(getattr(image, "quantization", None)) or 0.0) if image.format == "JPEG" else 0.0
+        jpeg_sigma = (
+            (sigma_from_tables(getattr(image, "quantization", None)) or 0.0)
+            if image.format == "JPEG"
+            else 0.0
+        )
         image_rgb = image.convert("RGB")
         return np.array(image_rgb), jpeg_sigma
 
@@ -131,7 +143,9 @@ async def validate_uploaded_image(file: UploadFile) -> Tuple[np.ndarray, float]:
         raise HTTPException(status_code=400, detail=f"Invalid image file: {str(e)}")
 
 
-def create_app(config: Optional[Config] = None, hash_list_path: Optional[str] = None) -> "FastAPI":
+def create_app(
+    config: Optional[Config] = None, hash_list_path: Optional[str] = None
+) -> "FastAPI":
     """
     Create FastAPI application with SpliceTrail engine.
 
@@ -164,6 +178,7 @@ def create_app(config: Optional[Config] = None, hash_list_path: Optional[str] = 
     hash_list_path = hash_list_path or os.environ.get("SPLICETRAIL_HASH_LIST") or None
     if hash_list_path:
         from splicetrail.hashing import load_hash_list
+
         try:
             hash_list = load_hash_list(hash_list_path)
         except (OSError, ValueError) as e:
@@ -182,6 +197,7 @@ def create_app(config: Optional[Config] = None, hash_list_path: Optional[str] = 
     async def startup_event():
         """Record service start time."""
         import time
+
         app.state.start_time = time.time()
 
     @app.get("/")
@@ -214,7 +230,7 @@ def create_app(config: Optional[Config] = None, hash_list_path: Optional[str] = 
         """
         try:
             # Check if index is accessible
-            index_size = engine.index.size if hasattr(engine, 'index') else 0
+            index_size = engine.index.size if hasattr(engine, "index") else 0
             target_count = engine.target_count
 
             # Service is ready if engine is initialized
@@ -222,14 +238,11 @@ def create_app(config: Optional[Config] = None, hash_list_path: Optional[str] = 
                 "status": "ready",
                 "index_size": index_size,
                 "target_count": target_count,
-                "timestamp": __import__("time").time()
+                "timestamp": __import__("time").time(),
             }
         except Exception as e:
             # If we can't check status, service is not ready
-            raise HTTPException(
-                status_code=503,
-                detail=f"Service not ready: {str(e)}"
-            )
+            raise HTTPException(status_code=503, detail=f"Service not ready: {str(e)}")
 
     @app.get("/health")
     async def health_check():
@@ -248,9 +261,13 @@ def create_app(config: Optional[Config] = None, hash_list_path: Optional[str] = 
             "status": "healthy",
             "version": __version__,
             "timestamp": time.time(),
-            "uptime_seconds": time.time() - app.state.start_time if hasattr(app.state, "start_time") else None,
+            "uptime_seconds": (
+                time.time() - app.state.start_time
+                if hasattr(app.state, "start_time")
+                else None
+            ),
             "index": {
-                "size": engine.index.size if hasattr(engine, 'index') else 0,
+                "size": engine.index.size if hasattr(engine, "index") else 0,
                 "target_count": engine.target_count,
                 "target_ids": engine.target_ids[:10] if engine.target_count > 0 else [],
             },
@@ -258,12 +275,13 @@ def create_app(config: Optional[Config] = None, hash_list_path: Optional[str] = 
                 "patch_size": engine.config.patch_size,
                 "pyramid_enabled": engine.config.pyramid_enabled,
                 "coherence_enabled": engine.config.coherence_enabled,
-            }
+            },
         }
 
         # Add memory info if available
         try:
             import psutil
+
             process = psutil.Process()
             memory_info = process.memory_info()
             health_info["memory"] = {
@@ -297,7 +315,9 @@ def create_app(config: Optional[Config] = None, hash_list_path: Optional[str] = 
     @app.post("/index", response_model=IndexResponse)
     async def index_image(
         file: UploadFile = File(...),
-        image_id: Optional[str] = Query(None, description="Unique image identifier", max_length=255),
+        image_id: Optional[str] = Query(
+            None, description="Unique image identifier", max_length=255
+        ),
     ):
         """
         Index a target image for later matching.
@@ -313,19 +333,25 @@ def create_app(config: Optional[Config] = None, hash_list_path: Optional[str] = 
             # Remove potentially dangerous characters
             image_id = "".join(c for c in image_id if c.isalnum() or c in "._-")
             if not image_id:
-                raise HTTPException(status_code=400, detail="Invalid image_id after sanitization")
+                raise HTTPException(
+                    status_code=400, detail="Invalid image_id after sanitization"
+                )
         else:
             # Random rather than counter-based: a count reuses ids after deletes.
             image_id = f"img_{uuid.uuid4().hex[:12]}"
 
         try:
             count = await run_in_threadpool(
-                locked, engine.index_target, image_array, image_id, jpeg_sigma=jpeg_sigma
+                locked,
+                engine.index_target,
+                image_array,
+                image_id,
+                jpeg_sigma=jpeg_sigma,
             )
         except TargetExistsError:
             raise HTTPException(
                 status_code=409,
-                detail=f"Image ID '{image_id}' already exists. Use a different ID or delete the existing one."
+                detail=f"Image ID '{image_id}' already exists. Use a different ID or delete the existing one.",
             )
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Indexing failed: {str(e)}")
@@ -340,7 +366,9 @@ def create_app(config: Optional[Config] = None, hash_list_path: Optional[str] = 
     @app.post("/match", response_model=MatchResponse)
     async def match_image(
         file: UploadFile = File(...),
-        target_ids: Optional[str] = Query(None, description="Comma-separated target IDs", max_length=1000),
+        target_ids: Optional[str] = Query(
+            None, description="Comma-separated target IDs", max_length=1000
+        ),
         return_heatmap: bool = Query(False, description="Include base64 heatmap"),
     ):
         """
@@ -389,36 +417,40 @@ def create_app(config: Optional[Config] = None, hash_list_path: Optional[str] = 
             regions_info = []
             for region in result.coherent_regions:
                 offset = region_offset(region)
-                regions_info.append(CoherentRegionInfo(
-                    offset=None if offset is None else MatchCoord(x=offset[0], y=offset[1]),
-                    mirrored=region.mirrored,
-                    source_scale=region.source_scale,
-                    rotation_degrees=round(float(np.degrees(region.rotation)), 2),
-                    image_id=region.image_id,
-                    num_matches=len(region.matches),
-                    confidence=region.confidence,
-                    log10_nfa=region.log10_nfa,
-                    significant=region.significant,
-                    source_bbox={
-                        "x": region.source_bbox[0],
-                        "y": region.source_bbox[1],
-                        "width": region.source_bbox[2],
-                        "height": region.source_bbox[3],
-                    },
-                    target_bbox={
-                        "x": region.target_bbox[0],
-                        "y": region.target_bbox[1],
-                        "width": region.target_bbox[2],
-                        "height": region.target_bbox[3],
-                    },
-                ))
+                regions_info.append(
+                    CoherentRegionInfo(
+                        offset=(
+                            None
+                            if offset is None
+                            else MatchCoord(x=offset[0], y=offset[1])
+                        ),
+                        mirrored=region.mirrored,
+                        source_scale=region.source_scale,
+                        rotation_degrees=round(float(np.degrees(region.rotation)), 2),
+                        image_id=region.image_id,
+                        num_matches=len(region.matches),
+                        confidence=region.confidence,
+                        log10_nfa=region.log10_nfa,
+                        significant=region.significant,
+                        source_bbox={
+                            "x": region.source_bbox[0],
+                            "y": region.source_bbox[1],
+                            "width": region.source_bbox[2],
+                            "height": region.source_bbox[3],
+                        },
+                        target_bbox={
+                            "x": region.target_bbox[0],
+                            "y": region.target_bbox[1],
+                            "width": region.target_bbox[2],
+                            "height": region.target_bbox[3],
+                        },
+                    )
+                )
 
             # Encode heatmap if requested
             heatmap_b64 = None
             if return_heatmap and result.heatmap is not None:
-                heatmap_img = Image.fromarray(
-                    (result.heatmap * 255).astype(np.uint8)
-                )
+                heatmap_img = Image.fromarray((result.heatmap * 255).astype(np.uint8))
                 buffer = io.BytesIO()
                 heatmap_img.save(buffer, format="PNG")
                 heatmap_b64 = base64.b64encode(buffer.getvalue()).decode()
@@ -444,7 +476,9 @@ def create_app(config: Optional[Config] = None, hash_list_path: Optional[str] = 
     async def hash_endpoint(
         file: UploadFile = File(...),
         algorithm: Optional[List[str]] = Query(
-            None, description="Algorithm to use; repeat for several. Default: every local one"),
+            None,
+            description="Algorithm to use; repeat for several. Default: every local one",
+        ),
     ):
         """
         Perceptual hashes of an uploaded image.
@@ -454,7 +488,12 @@ def create_app(config: Optional[Config] = None, hash_list_path: Optional[str] = 
         PhotoDNA Cloud Service and only works when the operator has set
         SPLICETRAIL_PHOTODNA_KEY on the server.
         """
-        from splicetrail.hashing import LOCAL_ALGORITHMS, available_algorithms, hash_image, match_hashes
+        from splicetrail.hashing import (
+            LOCAL_ALGORITHMS,
+            available_algorithms,
+            hash_image,
+            match_hashes,
+        )
 
         names = []
         for name in algorithm or []:
@@ -467,24 +506,26 @@ def create_app(config: Optional[Config] = None, hash_list_path: Optional[str] = 
         if unknown:
             raise HTTPException(
                 status_code=400,
-                detail=f"Unknown algorithm '{unknown[0]}'; choose from: pdq, phash, phash-lib, photodna")
+                detail=f"Unknown algorithm '{unknown[0]}'; choose from: pdq, phash, phash-lib, photodna",
+            )
         if not algorithm:
             names = available_algorithms()
             if not names:
                 raise HTTPException(
                     status_code=501,
                     detail="No hash algorithm is installed on the server: "
-                           "pip install splicetrail[hash]",
+                    "pip install splicetrail[hash]",
                 )
 
         client = None
         if use_photodna:
             from splicetrail import photodna
+
             if not os.environ.get("SPLICETRAIL_PHOTODNA_KEY"):
                 raise HTTPException(
                     status_code=403,
                     detail="photodna is disabled: the server operator has to set "
-                           "SPLICETRAIL_PHOTODNA_KEY (a Microsoft PhotoDNA Cloud Service key) on the server",
+                    "SPLICETRAIL_PHOTODNA_KEY (a Microsoft PhotoDNA Cloud Service key) on the server",
                 )
             try:
                 client = photodna.PhotoDnaClient()
@@ -495,22 +536,37 @@ def create_app(config: Optional[Config] = None, hash_list_path: Optional[str] = 
 
         try:
             hashes = await run_in_threadpool(
-                hash_image, image_array, names, dihedral=config.thorough)
+                hash_image, image_array, names, dihedral=config.thorough
+            )
         except DependencyError as e:
             raise HTTPException(status_code=501, detail=str(e))
         except RuntimeError as e:
-            raise HTTPException(status_code=502, detail=f"Hashing with {', '.join(names)} failed: {e}")
+            raise HTTPException(
+                status_code=502, detail=f"Hashing with {', '.join(names)} failed: {e}"
+            )
 
-        body: Dict[str, Any] = {"hashes": [
-            {"algorithm": h.algorithm, "hash": h.hex, "quality": h.quality, "variant": h.variant}
-            for h in hashes
-        ]}
+        body: Dict[str, Any] = {
+            "hashes": [
+                {
+                    "algorithm": h.algorithm,
+                    "hash": h.hex,
+                    "quality": h.quality,
+                    "variant": h.variant,
+                }
+                for h in hashes
+            ]
+        }
 
         if hash_list is not None:
             report = await run_in_threadpool(match_hashes, hashes, hash_list)
             body["matches"] = [
-                {"id": m.id, "algorithm": m.algorithm, "hash": m.hex,
-                 "distance": m.distance, "variant": m.variant}
+                {
+                    "id": m.id,
+                    "algorithm": m.algorithm,
+                    "hash": m.hex,
+                    "distance": m.distance,
+                    "variant": m.variant,
+                }
                 for m in report.matches
             ]
 
@@ -530,11 +586,13 @@ def create_app(config: Optional[Config] = None, hash_list_path: Optional[str] = 
         targets = []
         for image_id in engine.target_ids:
             shape = engine.get_target_shape(image_id)
-            targets.append({
-                "image_id": image_id,
-                "shape": {"height": shape[0], "width": shape[1]} if shape else None,
-                "path": engine.get_target_path(image_id),
-            })
+            targets.append(
+                {
+                    "image_id": image_id,
+                    "shape": {"height": shape[0], "width": shape[1]} if shape else None,
+                    "path": engine.get_target_path(image_id),
+                }
+            )
         return {"targets": targets, "count": len(targets)}
 
     @app.delete("/targets/{image_id}")

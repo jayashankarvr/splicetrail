@@ -7,7 +7,16 @@ import pytest
 from PIL import Image
 
 from splicetrail.bench import calibration
-from splicetrail.bench.datasets import _pasted_mask, _split_donor_host, casia2, comofod, coverage, load, manifest, split_labels
+from splicetrail.bench.datasets import (
+    _pasted_mask,
+    _split_donor_host,
+    casia2,
+    comofod,
+    coverage,
+    load,
+    manifest,
+    split_labels,
+)
 from splicetrail.bench.runner import main as runner_main
 
 
@@ -29,7 +38,9 @@ def _fake_casia(root, n=3):
         host, donor = _texture(2 * i), _texture(2 * i + 1)
         Image.fromarray(host).save(au / f"Au_ani_{i:05d}.jpg", quality=98)
         Image.fromarray(donor).save(au / f"Au_sec_{i:05d}.jpg", quality=98)
-        host, donor = (np.asarray(Image.open(au / f"Au_{c}_{i:05d}.jpg")) for c in ("ani", "sec"))
+        host, donor = (
+            np.asarray(Image.open(au / f"Au_{c}_{i:05d}.jpg")) for c in ("ani", "sec")
+        )
         tampered = host.copy()
         tampered[20:50, 30:70] = donor[10:40, 5:45]
         mask = np.zeros(host.shape[:2], np.uint8)
@@ -67,11 +78,15 @@ class TestCasia:
         for s in pos:
             # the donor is the 'sec' image: the pasted block came from it
             idx = int(s.params["ids"][1][3:])
-            expected = np.asarray(Image.open(tmp_path / "CASIA2" / "Au" / f"Au_sec_{idx:05d}.jpg"))
+            expected = np.asarray(
+                Image.open(tmp_path / "CASIA2" / "Au" / f"Au_sec_{idx:05d}.jpg")
+            )
             assert np.array_equal(s.donor, expected)
             assert s.mask.sum() == 30 * 40
         for s in neg:
-            assert s.params["donor"] == "Au_arc_00001.jpg"  # only unrelated category available
+            assert (
+                s.params["donor"] == "Au_arc_00001.jpg"
+            )  # only unrelated category available
 
     def test_split_rejects_when_neither_matches(self):
         tampered = _texture(1)
@@ -132,7 +147,9 @@ class TestCoverage:
         assert mask[50:80, 80:116].mean() > 0.95
 
     def test_copy_only_masks_report_recall_not_iou(self, tmp_path):
-        records = calibration.score_samples(coverage(root=str(_fake_coverage(tmp_path, n=1))))
+        records = calibration.score_samples(
+            coverage(root=str(_fake_coverage(tmp_path, n=1)))
+        )
         out = calibration.summary(records)
         assert np.isnan(out["iou"]) and np.isnan(out["precision"])
         assert out["recall"] > 0.5
@@ -153,7 +170,7 @@ class TestCoverage:
 
 class TestComofod:
     def test_loads_by_category(self, tmp_path):
-        for i in (3, 45):   # one translation case, one rotation case
+        for i in (3, 45):  # one translation case, one rotation case
             original = _texture(i, (64, 64))
             forged = original.copy()
             forged[30:50, 30:50] = original[5:25, 5:25]
@@ -163,7 +180,10 @@ class TestComofod:
             Image.fromarray(forged).save(tmp_path / f"{i:03d}_F.png")
             Image.fromarray(mask).save(tmp_path / f"{i:03d}_B.png")
         everything = comofod(root=str(tmp_path), negatives=2)
-        assert sorted(s.params["category"] for s in everything if s.label == 1) == ["rotation", "translation"]
+        assert sorted(s.params["category"] for s in everything if s.label == 1) == [
+            "rotation",
+            "translation",
+        ]
         rotation = comofod(root=str(tmp_path), category="rotation")
         assert [s.params["image"] for s in rotation] == ["045_F.png"]
         with pytest.raises(ValueError):
@@ -182,8 +202,13 @@ class TestCalibration:
             S(label=0, regions=[R(-2.0, False)]),
             S(label=0, regions=[]),
         ]
-        rows = {r["epsilon"]: r for r in calibration.calibration_table(records, epsilons=(1e-3, 1.0, 10.0))}
-        assert rows[1e-3]["false_regions_per_pair"] == 0.0 and rows[1e-3]["recall"] == 0.5
+        rows = {
+            r["epsilon"]: r
+            for r in calibration.calibration_table(records, epsilons=(1e-3, 1.0, 10.0))
+        }
+        assert (
+            rows[1e-3]["false_regions_per_pair"] == 0.0 and rows[1e-3]["recall"] == 0.5
+        )
         assert rows[1.0]["false_regions_per_pair"] == pytest.approx(2 / 4)
         assert rows[1.0]["null_pairs_with_alarm"] == 0.5
         assert rows[10.0]["recall"] == 1.0
@@ -199,7 +224,18 @@ class TestCalibration:
 
 def test_runner_end_to_end(tmp_path):
     out = tmp_path / "r.json"
-    report = runner_main(["--n", "2", "--negatives", "1", "--calibrate", "--no-baselines", "--json", str(out)])
+    report = runner_main(
+        [
+            "--n",
+            "2",
+            "--negatives",
+            "1",
+            "--calibrate",
+            "--no-baselines",
+            "--json",
+            str(out),
+        ]
+    )
     assert out.exists() and report["calibration"]
     assert report["results"]["splicetrail"]["iou"] > 0.5
 
@@ -207,14 +243,24 @@ def test_runner_end_to_end(tmp_path):
 class TestGeometricVariants:
     def test_rotated_and_mirrored_fragments(self):
         pytest.importorskip("skimage")
-        samples = load("photos", n=6, crop_size=96, fragment_size=24, rotation=180, flip=True, seed=1)
+        samples = load(
+            "photos",
+            n=6,
+            crop_size=96,
+            fragment_size=24,
+            rotation=180,
+            flip=True,
+            seed=1,
+        )
         angles = [s.params["angle"] for s in samples]
         assert any(abs(a) > 10 for a in angles)
         assert any(s.params["mirrored"] for s in samples)
 
     def test_copy_move_samples(self):
         pytest.importorskip("skimage")
-        samples = load("photos", copy_move=True, n=2, negatives=1, crop_size=96, fragment_size=24)
+        samples = load(
+            "photos", copy_move=True, n=2, negatives=1, crop_size=96, fragment_size=24
+        )
         assert [s.label for s in samples] == [1, 1, 0]
         assert all(s.donor is None for s in samples)
         assert samples[0].mask.sum() == 2 * 24 * 24
@@ -228,5 +274,7 @@ class TestGeometricVariants:
         a, b = g[47:77, 290:376], g[209:239, 293:379]
         assert np.corrcoef(a.ravel(), b.ravel())[0, 1] > 0.85
 
-        samples = load("photos", copy_move=True, n=20, negatives=20, crop_size=96, fragment_size=24)
+        samples = load(
+            "photos", copy_move=True, n=20, negatives=20, crop_size=96, fragment_size=24
+        )
         assert not any(s.params["photo"] in ("grass", "gravel") for s in samples)

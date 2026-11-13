@@ -8,11 +8,12 @@ import numpy as np
 @dataclass
 class VerificationResult:
     """Result of affine color transform verification."""
-    M: np.ndarray       # 3x3 color transformation matrix
-    b: np.ndarray       # 3x1 bias vector
-    rss: float          # Residual Sum of Squares (for chi-square test)
-    dof: int            # degrees of freedom
-    success: bool       # whether verification succeeded
+
+    M: np.ndarray  # 3x3 color transformation matrix
+    b: np.ndarray  # 3x1 bias vector
+    rss: float  # Residual Sum of Squares (for chi-square test)
+    dof: int  # degrees of freedom
+    success: bool  # whether verification succeeded
 
 
 class AffineVerifier:
@@ -67,7 +68,7 @@ class AffineVerifier:
             return VerificationResult(
                 M=np.eye(3),
                 b=np.zeros(3),
-                rss=float('inf'),
+                rss=float("inf"),
                 dof=0,
                 success=False,
             )
@@ -84,7 +85,7 @@ class AffineVerifier:
         else:
             M, b, rss = self._solve_l2(source, target)
 
-        success = rss < float('inf') and not np.isnan(rss)
+        success = rss < float("inf") and not np.isnan(rss)
 
         return VerificationResult(
             M=M,
@@ -110,7 +111,7 @@ class AffineVerifier:
         try:
             XtX_inv = np.linalg.inv(XtX)
         except np.linalg.LinAlgError:
-            return np.eye(3), np.zeros(3), float('inf')
+            return np.eye(3), np.zeros(3), float("inf")
 
         M = np.zeros((3, 3))
         b = np.zeros(3)
@@ -122,7 +123,7 @@ class AffineVerifier:
 
         predicted = source @ M.T + b
         residuals = target - predicted
-        rss = float(np.sum(residuals ** 2))
+        rss = float(np.sum(residuals**2))
         return M, b, rss
 
     def _solve_huber(
@@ -138,7 +139,7 @@ class AffineVerifier:
         n = source.shape[0]
         X = np.hstack([source, np.ones((n, 1))])
 
-        prev_rss = float('inf')
+        prev_rss = float("inf")
 
         for _ in range(self.max_iterations):
             predicted = source @ M.T + b
@@ -173,7 +174,7 @@ class AffineVerifier:
             # Check convergence
             predicted = source @ M.T + b
             residuals = target - predicted
-            rss = float(np.sum(residuals ** 2))
+            rss = float(np.sum(residuals**2))
 
             if abs(prev_rss - rss) < self.convergence_threshold:
                 break

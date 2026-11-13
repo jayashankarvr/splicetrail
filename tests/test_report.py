@@ -34,7 +34,11 @@ def _result(matches):
         best_match=best,
         heatmap=None,
         coherent_regions=[],
-        stats={"source_patches": 5, "total_matches": len(matches), "coherent_regions": 0},
+        stats={
+            "source_patches": 5,
+            "total_matches": len(matches),
+            "coherent_regions": 0,
+        },
     )
 
 
@@ -70,7 +74,9 @@ class TestBuildReport:
 
         path = str(Path(__file__).parent / "data" / "hashes" / "bridge-1-original.jpg")
         image = load_image(path)
-        report = build_report(result=_result([]), config=Config(), source_path=path, source_image=image)
+        report = build_report(
+            result=_result([]), config=Config(), source_path=path, source_image=image
+        )
         assert report["schema_version"] == "2.2"
         hashes = report["inputs"]["source"]["hashes"]
         pdq = hash_image(image, ["pdq"])[0]
@@ -83,7 +89,9 @@ class TestBuildReport:
     def test_report_survives_missing_hash_packages(self, monkeypatch):
         monkeypatch.setitem(sys.modules, "pdqhash", None)
         monkeypatch.setitem(sys.modules, "imagehash", None)
-        report = build_report(result=_result([]), config=Config(), source_image=np.zeros((20, 20, 3)))
+        report = build_report(
+            result=_result([]), config=Config(), source_image=np.zeros((20, 20, 3))
+        )
         hashes = report["inputs"]["source"].get("hashes", {})
         assert "pdq" not in hashes and "phash" not in hashes
 
@@ -96,7 +104,9 @@ class TestBuildReport:
             raise RuntimeError("libpHash exploded")
 
         monkeypatch.setattr(hashing._ALGORITHMS["pdq"], "compute", boom)
-        report = build_report(result=_result([]), config=Config(), source_image=np.zeros((20, 20, 3)))
+        report = build_report(
+            result=_result([]), config=Config(), source_image=np.zeros((20, 20, 3))
+        )
         hashes = report["inputs"]["source"]["hashes"]
         assert "pdq" not in hashes and "hash" in hashes["phash"]
         assert "pdq" in caplog.text
@@ -116,8 +126,16 @@ class TestBuildReport:
         assert report["result"]["num_matches"] == 0
 
     def test_localization_present_with_source_image(self):
-        m = Match(source_coord=(2, 2), target_coord=(0, 0), patch_size=3, probability=0.9, image_id="t")
-        report = build_report(result=_result([m]), config=Config(), source_image=np.zeros((20, 20, 3)))
+        m = Match(
+            source_coord=(2, 2),
+            target_coord=(0, 0),
+            patch_size=3,
+            probability=0.9,
+            image_id="t",
+        )
+        report = build_report(
+            result=_result([m]), config=Config(), source_image=np.zeros((20, 20, 3))
+        )
         loc = report["result"]["localization"]
         assert loc is not None
         assert "bbox" in loc and "detection_score" in loc
@@ -130,7 +148,9 @@ class TestBuildReport:
         assert report["result"]["localization"] is None
 
     def test_cues_present_with_source_image(self):
-        report = build_report(result=_result([]), config=Config(), source_image=np.zeros((80, 80, 3)))
+        report = build_report(
+            result=_result([]), config=Config(), source_image=np.zeros((80, 80, 3))
+        )
         cues = report["cues"]
         assert cues is not None
         si = cues["scale_inconsistency"]
@@ -178,7 +198,9 @@ class TestBuildReport:
 
     def test_deterministic_timestamp_override(self):
         report = build_report(
-            result=_result([]), config=Config(), generated_at="2026-01-01T00:00:00+00:00"
+            result=_result([]),
+            config=Config(),
+            generated_at="2026-01-01T00:00:00+00:00",
         )
         assert report["generated_at"] == "2026-01-01T00:00:00+00:00"
 
@@ -204,8 +226,12 @@ class TestSignificanceFields:
             coherent_regions=[region],
             stats={},
         )
-        report = build_report(result=result, config=Config(), source_image=np.zeros((8, 8, 3), np.uint8),
-                              compute_cues=False)
+        report = build_report(
+            result=result,
+            config=Config(),
+            source_image=np.zeros((8, 8, 3), np.uint8),
+            compute_cues=False,
+        )
         assert report["result"]["detected"] is True
         r = report["result"]["coherent_regions"][0]
         assert r["significant"] is True and r["log10_nfa"] == -4.2
@@ -224,12 +250,17 @@ class TestVisualReport:
         engine = ForensicsEngine()
         engine.index_target(sample.donor, "donor")
         result = engine.match(sample.tampered)
-        report = build_report(result=result, config=engine.config, source_image=sample.tampered,
-                              target_image=sample.donor, compute_cues=False)
+        report = build_report(
+            result=result,
+            config=engine.config,
+            source_image=sample.tampered,
+            target_image=sample.donor,
+            compute_cues=False,
+        )
         page = render_html(report, sample.tampered, sample.donor, result.heatmap)
         assert page.startswith("<!doctype html>")
         assert "1 copied region found" in page
-        assert page.count("<rect ") == 2          # the region, outlined on both images
+        assert page.count("<rect ") == 2  # the region, outlined on both images
         assert page.count("data:image/png;base64,") == 3
 
     def test_no_detection_says_so(self):

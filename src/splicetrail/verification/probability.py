@@ -33,6 +33,6 @@ class ProbabilityModel:
         """p-value for one RSS or an array of them; ``dof`` may be a scalar or per-element."""
         rss_arr = np.asarray(rss, dtype=np.float64)
         dof_arr = np.asarray(dof, dtype=np.float64)
-        p = stats.chi2.sf(rss_arr / self.noise_sigma ** 2, np.maximum(dof_arr, 1))
+        p = stats.chi2.sf(rss_arr / self.noise_sigma**2, np.maximum(dof_arr, 1))
         p = np.where((rss_arr < 0) | (dof_arr <= 0) | ~np.isfinite(rss_arr), 0.0, p)
         return float(p) if p.ndim == 0 else p

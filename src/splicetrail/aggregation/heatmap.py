@@ -10,9 +10,10 @@ from scipy.ndimage import gaussian_filter
 @dataclass
 class Match:
     """A verified match between source and target patches."""
+
     source_coord: Tuple[int, int]
-    target_coord: Tuple[int, int]   # full-resolution target coordinates
-    patch_size: int                 # side of the source patch, in pixels
+    target_coord: Tuple[int, int]  # full-resolution target coordinates
+    patch_size: int  # side of the source patch, in pixels
     probability: float
     image_id: str = ""
     # Recovered affine color transform (target = M @ source + b) from verification.
@@ -41,23 +42,57 @@ class MatchList(Sequence):
     (a region setting its colour transform) stick.
     """
 
-    _FIELDS = ("src_xy", "tgt_xy", "prob", "image_ids", "scale", "rotation", "mirrored", "source_scale", "patch_sizes")
+    _FIELDS = (
+        "src_xy",
+        "tgt_xy",
+        "prob",
+        "image_ids",
+        "scale",
+        "rotation",
+        "mirrored",
+        "source_scale",
+        "patch_sizes",
+    )
 
-    def __init__(self, patch_size: int, src_xy, tgt_xy, prob, image_ids, scale, rotation=None,
-                 mirrored=None, source_scale=None, patch_sizes=None):
+    def __init__(
+        self,
+        patch_size: int,
+        src_xy,
+        tgt_xy,
+        prob,
+        image_ids,
+        scale,
+        rotation=None,
+        mirrored=None,
+        source_scale=None,
+        patch_sizes=None,
+    ):
         n = len(prob)
         self.patch_size = patch_size
         # Per match, since a thorough search combines footprints of different sizes.
-        self.patch_sizes = (np.full(n, patch_size, dtype=np.int64) if patch_sizes is None
-                            else np.asarray(patch_sizes, dtype=np.int64))
+        self.patch_sizes = (
+            np.full(n, patch_size, dtype=np.int64)
+            if patch_sizes is None
+            else np.asarray(patch_sizes, dtype=np.int64)
+        )
         self.src_xy = np.asarray(src_xy, dtype=np.int64).reshape(n, 2)
         self.tgt_xy = np.asarray(tgt_xy, dtype=np.int64).reshape(n, 2)
         self.prob = np.asarray(prob, dtype=np.float64)
         self.image_ids = np.asarray(image_ids, dtype=object)
         self.scale = np.asarray(scale, dtype=np.float64)
-        self.rotation = np.zeros(n) if rotation is None else np.asarray(rotation, dtype=np.float64)
-        self.mirrored = np.zeros(n, dtype=bool) if mirrored is None else np.asarray(mirrored, dtype=bool)
-        self.source_scale = np.ones(n) if source_scale is None else np.asarray(source_scale, dtype=np.float64)
+        self.rotation = (
+            np.zeros(n) if rotation is None else np.asarray(rotation, dtype=np.float64)
+        )
+        self.mirrored = (
+            np.zeros(n, dtype=bool)
+            if mirrored is None
+            else np.asarray(mirrored, dtype=bool)
+        )
+        self.source_scale = (
+            np.ones(n)
+            if source_scale is None
+            else np.asarray(source_scale, dtype=np.float64)
+        )
         self._made: Dict[int, Match] = {}
 
     @classmethod
@@ -67,7 +102,10 @@ class MatchList(Sequence):
     @classmethod
     def concat(cls, lists: List["MatchList"]) -> "MatchList":
         """One list holding all of ``lists``; objects already made carry over."""
-        out = cls(lists[0].patch_size, *(np.concatenate([getattr(m, f) for m in lists]) for f in cls._FIELDS))
+        out = cls(
+            lists[0].patch_size,
+            *(np.concatenate([getattr(m, f) for m in lists]) for f in cls._FIELDS),
+        )
         start = 0
         for m in lists:
             out._made.update({start + i: match for i, match in m._made.items()})
@@ -123,7 +161,9 @@ class MatchList(Sequence):
         x = self.src_xy[:, 0].astype(np.float64)
         if mirrored:
             x = pass_width - self.patch_sizes - x
-        self.src_xy = np.stack([np.round(x / scale), np.round(self.src_xy[:, 1] / scale)], axis=1).astype(np.int64)
+        self.src_xy = np.stack(
+            [np.round(x / scale), np.round(self.src_xy[:, 1] / scale)], axis=1
+        ).astype(np.int64)
         self.mirrored[:] = mirrored
         self.source_scale[:] = scale
         for i, m in self._made.items():
@@ -163,7 +203,12 @@ class SpatialAggregator:
         for match in matches:
             x, y = int(match.target_coord[0]), int(match.target_coord[1])
             size = max(1, int(round(match.patch_size / match.target_scale)))
-            x0, y0, x1, y1 = max(0, x), max(0, y), min(width, x + size), min(height, y + size)
+            x0, y0, x1, y1 = (
+                max(0, x),
+                max(0, y),
+                min(width, x + size),
+                min(height, y + size),
+            )
             if x0 >= x1 or y0 >= y1:
                 continue
             heatmap[y0:y1, x0:x1] += match.probability

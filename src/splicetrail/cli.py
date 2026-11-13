@@ -9,6 +9,7 @@ from PIL import Image
 
 try:
     import click
+
     CLICK_AVAILABLE = True
 except ImportError:
     click = None
@@ -35,22 +36,32 @@ def cli():
     pass
 
 
-def validate_params(threshold: Optional[float], patch_size: Optional[int], entropy: Optional[float]) -> None:
+def validate_params(
+    threshold: Optional[float], patch_size: Optional[int], entropy: Optional[float]
+) -> None:
     """Validate common CLI parameters (None means "use the Config default")."""
     if threshold is not None and not 0 <= threshold <= 1:
         raise click.BadParameter(f"threshold must be between 0 and 1, got {threshold}")
     if patch_size is not None and not (3 <= patch_size <= 16):
-        raise click.BadParameter(f"patch-size must be between 3 and 16, got {patch_size}")
+        raise click.BadParameter(
+            f"patch-size must be between 3 and 16, got {patch_size}"
+        )
     if entropy is not None and entropy < 0:
         raise click.BadParameter(f"entropy must be >= 0, got {entropy}")
 
 
-THOROUGH_HELP = ("Also check mirrored, enlarged and rotated copies, not just copied, recolored and "
-                 "shrunk ones (rotation across images only, not within one image); about 13x slower")
+THOROUGH_HELP = (
+    "Also check mirrored, enlarged and rotated copies, not just copied, recolored and "
+    "shrunk ones (rotation across images only, not within one image); about 13x slower"
+)
 
 
-def build_config(threshold: Optional[float], patch_size: Optional[int], entropy: Optional[float],
-                 thorough: bool = False) -> Config:
+def build_config(
+    threshold: Optional[float],
+    patch_size: Optional[int],
+    entropy: Optional[float],
+    thorough: bool = False,
+) -> Config:
     """Config from CLI flags; anything left as None keeps its Config/SPLICETRAIL_* default."""
     overrides = {"thorough": True} if thorough else {}
     if entropy is not None:
@@ -91,7 +102,9 @@ def echo_regions(result, limit: int = 5) -> None:
     """Print the most significant regions, or say there are none."""
     significant = result.significant_regions
     if not significant:
-        click.echo("\nNo significant copied region found (no region with NFA < max_nfa).")
+        click.echo(
+            "\nNo significant copied region found (no region with NFA < max_nfa)."
+        )
         return
     click.echo(f"\nSignificant regions: {len(significant)}")
     for region in significant[:limit]:
@@ -110,11 +123,34 @@ THRESHOLD_HELP = "Per-patch fit p-value floor (0-1); default from config"
 @click.argument("source", type=click.Path(exists=True))
 @click.argument("target", type=click.Path(exists=True))
 @click.option("-t", "--threshold", type=float, default=None, help=THRESHOLD_HELP)
-@click.option("-p", "--patch-size", type=int, default=None, help="Patch size (3-16); default from config")
-@click.option("-e", "--entropy", type=float, default=None, help="Entropy threshold in bits (0 disables); default from config")
+@click.option(
+    "-p",
+    "--patch-size",
+    type=int,
+    default=None,
+    help="Patch size (3-16); default from config",
+)
+@click.option(
+    "-e",
+    "--entropy",
+    type=float,
+    default=None,
+    help="Entropy threshold in bits (0 disables); default from config",
+)
 @click.option("-o", "--output", type=click.Path(), help="Output heatmap image path")
-@click.option("-j", "--json", "json_output", type=click.Path(), help="Write JSON forensic report to this path")
-@click.option("--html", "html_output", type=click.Path(), help="Write a visual HTML report to this path")
+@click.option(
+    "-j",
+    "--json",
+    "json_output",
+    type=click.Path(),
+    help="Write JSON forensic report to this path",
+)
+@click.option(
+    "--html",
+    "html_output",
+    type=click.Path(),
+    help="Write a visual HTML report to this path",
+)
 @click.option("--thorough", is_flag=True, help=THOROUGH_HELP)
 @click.option("-v", "--verbose", is_flag=True, help="Verbose output")
 def match(
@@ -145,7 +181,9 @@ def match(
 
     if verbose:
         click.echo("Indexing target...")
-    num_patches = engine.index_target(target_img, "target", jpeg_sigma=quantization_sigma(target) or 0.0)
+    num_patches = engine.index_target(
+        target_img, "target", jpeg_sigma=quantization_sigma(target) or 0.0
+    )
     if num_patches == 0:
         raise click.ClickException(
             "No textured patches in target. "
@@ -190,11 +228,24 @@ def match(
 
 @cli.command()
 @click.argument("directory", type=click.Path(exists=True))
-@click.option("-o", "--output", default="index.splicetrail", help="Output index path prefix")
+@click.option(
+    "-o", "--output", default="index.splicetrail", help="Output index path prefix"
+)
 @click.option("-p", "--pattern", default="*.jpg,*.png", help="File patterns to index")
-@click.option("--patch-size", type=int, default=None, help="Patch size (3-16); default from config")
-@click.option("--thorough", is_flag=True, help=THOROUGH_HELP + " (decided when indexing; search and scan follow the index)")
-def index(directory: str, output: str, pattern: str, patch_size: Optional[int], thorough: bool):
+@click.option(
+    "--patch-size",
+    type=int,
+    default=None,
+    help="Patch size (3-16); default from config",
+)
+@click.option(
+    "--thorough",
+    is_flag=True,
+    help=THOROUGH_HELP + " (decided when indexing; search and scan follow the index)",
+)
+def index(
+    directory: str, output: str, pattern: str, patch_size: Optional[int], thorough: bool
+):
     """Index all images in DIRECTORY for later searching."""
     dir_path = Path(directory)
     patterns = [p.strip() for p in pattern.split(",")]
@@ -222,7 +273,9 @@ def index(directory: str, output: str, pattern: str, patch_size: Optional[int], 
             try:
                 img = load_image(str(img_path))
                 # The absolute path lets `splicetrail search` reload patches for verification.
-                total_patches += engine.index_target(img, str(img_path), image_path=str(img_path.resolve()))
+                total_patches += engine.index_target(
+                    img, str(img_path), image_path=str(img_path.resolve())
+                )
             except Exception as e:
                 click.echo(f"\nSkipped {img_path}: {e}")
 
@@ -259,12 +312,16 @@ def search(
     if engine.index.size == 0:
         raise click.ClickException("Index is empty. No images have been indexed.")
     if verbose:
-        click.echo(f"  {engine.index.size} descriptors from {engine.target_count} images")
+        click.echo(
+            f"  {engine.index.size} descriptors from {engine.target_count} images"
+        )
 
     source_img = safe_load_image(source)
     if verbose:
         click.echo("Searching...")
-    result = engine.match(source_img, return_heatmap=False, jpeg_sigma=quantization_sigma(source) or 0.0)
+    result = engine.match(
+        source_img, return_heatmap=False, jpeg_sigma=quantization_sigma(source) or 0.0
+    )
 
     click.echo(f"\nSource patches: {result.stats['source_patches']}")
     click.echo(f"Patch matches: {result.stats['total_matches']}")
@@ -274,7 +331,12 @@ def search(
 @cli.command()
 @click.argument("index_file")
 @click.argument("sources", nargs=-1, required=True, type=click.Path(exists=True))
-@click.option("--fdr", default=0.05, show_default=True, help="False discovery rate across all reported regions")
+@click.option(
+    "--fdr",
+    default=0.05,
+    show_default=True,
+    help="False discovery rate across all reported regions",
+)
 def scan(index_file: str, sources, fdr: float):
     """Search many SOURCES against INDEX_FILE, keeping the false discovery rate at --fdr.
 
@@ -294,12 +356,16 @@ def scan(index_file: str, sources, fdr: float):
     with click.progressbar(sources, label="Searching") as progress:
         for path in progress:
             results[path] = engine.match(
-                safe_load_image(path), return_heatmap=False, jpeg_sigma=quantization_sigma(path) or 0.0
+                safe_load_image(path),
+                return_heatmap=False,
+                jpeg_sigma=quantization_sigma(path) or 0.0,
             )
 
     selected = fdr_select(list(results.values()), q=fdr)
     owner = {id(r): path for path, res in results.items() for r in res.coherent_regions}
-    click.echo(f"\n{len(selected)} region(s) at FDR {fdr} across {len(sources)} image(s):")
+    click.echo(
+        f"\n{len(selected)} region(s) at FDR {fdr} across {len(sources)} image(s):"
+    )
     for region in selected:
         x, y, w, h = region.source_bbox
         click.echo(
@@ -311,12 +377,33 @@ def scan(index_file: str, sources, fdr: float):
 @cli.command()
 @click.argument("directory", type=click.Path(exists=True, file_okay=False))
 @click.option("-p", "--pattern", default="*.jpg,*.png", help="File patterns to include")
-@click.option("--fdr", default=0.05, show_default=True, help="False discovery rate across all reported regions")
-@click.option("--copy-moves", is_flag=True, help="Also look for regions duplicated within each image")
-@click.option("--json", "json_output", type=click.Path(), help="Write the links as JSON")
-@click.option("--dot", "dot_output", type=click.Path(), help="Write a Graphviz graph of the links")
+@click.option(
+    "--fdr",
+    default=0.05,
+    show_default=True,
+    help="False discovery rate across all reported regions",
+)
+@click.option(
+    "--copy-moves",
+    is_flag=True,
+    help="Also look for regions duplicated within each image",
+)
+@click.option(
+    "--json", "json_output", type=click.Path(), help="Write the links as JSON"
+)
+@click.option(
+    "--dot", "dot_output", type=click.Path(), help="Write a Graphviz graph of the links"
+)
 @click.option("--thorough", is_flag=True, help=THOROUGH_HELP)
-def provenance(directory: str, pattern: str, fdr: float, copy_moves: bool, json_output, dot_output, thorough: bool):
+def provenance(
+    directory: str,
+    pattern: str,
+    fdr: float,
+    copy_moves: bool,
+    json_output,
+    dot_output,
+    thorough: bool,
+):
     """Find which images in DIRECTORY share copied regions with which.
 
     Links are undirected: the pixels don't say which image was the original.
@@ -325,7 +412,9 @@ def provenance(directory: str, pattern: str, fdr: float, copy_moves: bool, json_
 
     from splicetrail.provenance import build_provenance, to_dict, to_dot
 
-    paths = sorted({p for pat in pattern.split(",") for p in Path(directory).glob(pat.strip())})
+    paths = sorted(
+        {p for pat in pattern.split(",") for p in Path(directory).glob(pat.strip())}
+    )
     if len(paths) < 2 and not copy_moves:
         raise click.ClickException("Need at least two images (or --copy-moves).")
     engine = ForensicsEngine(build_config(None, None, None, thorough))
@@ -343,7 +432,9 @@ def provenance(directory: str, pattern: str, fdr: float, copy_moves: bool, json_
     for link in links:
         what = "duplicated within" if link.a == link.b else "shared by"
         pair = link.a if link.a == link.b else f"{link.a} <-> {link.b}"
-        click.echo(f"  {len(link.regions)} region(s) {what} {pair}, best log10 NFA {link.log10_nfa:.1f}")
+        click.echo(
+            f"  {len(link.regions)} region(s) {what} {pair}, best log10 NFA {link.log10_nfa:.1f}"
+        )
     if json_output:
         with open(json_output, "w") as f:
             json.dump(to_dict(links), f, indent=2)
@@ -353,29 +444,63 @@ def provenance(directory: str, pattern: str, fdr: float, copy_moves: bool, json_
 
 
 @cli.command("hash")
-@click.argument("images", nargs=-1, required=True, type=click.Path(exists=True, dir_okay=False))
-@click.option("-a", "--algorithm", "algorithms", multiple=True,
-              help="Hash algorithm: pdq, phash, phash-lib, or all (every one available here). "
-                   "Repeat for several. Default: all. photodna (licensees only, needs "
-                   "SPLICETRAIL_PHOTODNA_KEY) is used only when named")
-@click.option("--against", "hash_list", type=click.Path(exists=True, dir_okay=False),
-              help="CSV list of known hashes to match against: algorithm,hash,id rows, "
-                   "or hash,id / bare hashes when a single --algorithm is given")
-@click.option("--max-distance", type=click.IntRange(min=0), default=None,
-              help="Largest Hamming distance that counts as a match; default depends on the algorithm")
-@click.option("--min-quality", type=click.IntRange(0, 100), default=50, show_default=True,
-              help="Skip matching PDQ hashes of images with a lower quality score")
-@click.option("--thorough", is_flag=True,
-              help="Also hash the eight rotations and flips of each image, to match rotated or flipped copies")
-@click.option("--json", "json_output", type=click.Path(), help="Write the hashes and matches as JSON")
-def hash_command(images, algorithms, hash_list, max_distance, min_quality, thorough, json_output):
+@click.argument(
+    "images", nargs=-1, required=True, type=click.Path(exists=True, dir_okay=False)
+)
+@click.option(
+    "-a",
+    "--algorithm",
+    "algorithms",
+    multiple=True,
+    help="Hash algorithm: pdq, phash, phash-lib, or all (every one available here). "
+    "Repeat for several. Default: all. photodna (licensees only, needs "
+    "SPLICETRAIL_PHOTODNA_KEY) is used only when named",
+)
+@click.option(
+    "--against",
+    "hash_list",
+    type=click.Path(exists=True, dir_okay=False),
+    help="CSV list of known hashes to match against: algorithm,hash,id rows, "
+    "or hash,id / bare hashes when a single --algorithm is given",
+)
+@click.option(
+    "--max-distance",
+    type=click.IntRange(min=0),
+    default=None,
+    help="Largest Hamming distance that counts as a match; default depends on the algorithm",
+)
+@click.option(
+    "--min-quality",
+    type=click.IntRange(0, 100),
+    default=50,
+    show_default=True,
+    help="Skip matching PDQ hashes of images with a lower quality score",
+)
+@click.option(
+    "--thorough",
+    is_flag=True,
+    help="Also hash the eight rotations and flips of each image, to match rotated or flipped copies",
+)
+@click.option(
+    "--json",
+    "json_output",
+    type=click.Path(),
+    help="Write the hashes and matches as JSON",
+)
+def hash_command(
+    images, algorithms, hash_list, max_distance, min_quality, thorough, json_output
+):
     """Print perceptual hashes of IMAGES and optionally match them against a list."""
     import json
 
     from splicetrail.exceptions import DependencyError
     from splicetrail.hashing import (
-        LOCAL_ALGORITHMS, MissingAlgorithmError, available_algorithms, hash_image,
-        load_hash_list, match_hashes,
+        LOCAL_ALGORITHMS,
+        MissingAlgorithmError,
+        available_algorithms,
+        hash_image,
+        load_hash_list,
+        match_hashes,
     )
 
     local = available_algorithms()
@@ -394,7 +519,9 @@ def hash_command(images, algorithms, hash_list, max_distance, min_quality, thoro
     known = set(LOCAL_ALGORITHMS)
     for n in names:
         if n not in known:
-            raise click.ClickException(f"Unknown algorithm '{n}'; choose from: {', '.join(sorted(known))}, all")
+            raise click.ClickException(
+                f"Unknown algorithm '{n}'; choose from: {', '.join(sorted(known))}, all"
+            )
     if not names and not use_photodna:
         raise click.ClickException(
             "No hash algorithm is installed here: pip install splicetrail[hash]"
@@ -404,7 +531,9 @@ def hash_command(images, algorithms, hash_list, max_distance, min_quality, thoro
     named = {a.lower() for a in algorithms}
     list_algorithm = names[0] if len(names) == 1 and named == {names[0]} else None
     try:
-        known_hashes = load_hash_list(hash_list, algorithm=list_algorithm) if hash_list else None
+        known_hashes = (
+            load_hash_list(hash_list, algorithm=list_algorithm) if hash_list else None
+        )
     except MissingAlgorithmError as e:
         raise click.ClickException(
             f"Can't read hash list: {e.path}, line {e.line} has no algorithm column; "
@@ -418,14 +547,18 @@ def hash_command(images, algorithms, hash_list, max_distance, min_quality, thoro
     if json_output:
         target = os.path.abspath(json_output)
         folder = os.path.dirname(target)
-        writable = (os.path.isdir(folder) and os.access(folder, os.W_OK)
-                    and (not os.path.exists(target) or os.access(target, os.W_OK)))
+        writable = (
+            os.path.isdir(folder)
+            and os.access(folder, os.W_OK)
+            and (not os.path.exists(target) or os.access(target, os.W_OK))
+        )
         if os.path.isdir(target) or not writable:
             raise click.ClickException(f"Can't write {json_output}")
 
     photodna_client = None
     if use_photodna:
         from splicetrail import photodna
+
         try:
             photodna_client = photodna.PhotoDnaClient()
         except photodna.PhotoDnaError as e:
@@ -451,8 +584,11 @@ def hash_command(images, algorithms, hash_list, max_distance, min_quality, thoro
             except photodna.PhotoDnaError as e:
                 raise click.ClickException(str(e))
         result = (
-            match_hashes(hashes, known_hashes, max_distance=max_distance, min_quality=min_quality)
-            if known_hashes is not None else None
+            match_hashes(
+                hashes, known_hashes, max_distance=max_distance, min_quality=min_quality
+            )
+            if known_hashes is not None
+            else None
         )
         report.append((path, hashes, result, verdict))
 
@@ -468,37 +604,63 @@ def hash_command(images, algorithms, hash_list, max_distance, min_quality, thoro
         if result is not None:
             for m in result.matches:
                 # List ids come from a file we don't control.
-                ident = m.id if m.id.isprintable() else m.id.encode("unicode_escape").decode()
-                click.echo(f"  match {ident} ({m.algorithm}) distance={m.distance} variant={m.variant}")
+                ident = (
+                    m.id
+                    if m.id.isprintable()
+                    else m.id.encode("unicode_escape").decode()
+                )
+                click.echo(
+                    f"  match {ident} ({m.algorithm}) distance={m.distance} variant={m.variant}"
+                )
             if not result.matches:
                 compared = len(hashes) - len(result.skipped_low_quality)
                 if compared > 0:
                     click.echo("  no match")
                 elif hashes:
-                    click.echo(f"  not compared (all hashes below quality {min_quality})")
+                    click.echo(
+                        f"  not compared (all hashes below quality {min_quality})"
+                    )
                 else:
                     click.echo("  no local hashes to compare")
             seen = {(h.algorithm, h.quality) for h in result.skipped_low_quality}
             for algo, quality in sorted(seen):
-                click.echo(f"  skipped {algo} hash: quality {quality} is below {min_quality}")
+                click.echo(
+                    f"  skipped {algo} hash: quality {quality} is below {min_quality}"
+                )
 
     if json_output:
-        def hash_dict(h):
-            return {"algorithm": h.algorithm, "hash": h.hex, "quality": h.quality, "variant": h.variant}
 
-        doc = {"images": [
-            {
-                "path": path,
-                "hashes": [hash_dict(h) for h in hashes],
-                "matches": [
-                    {"id": m.id, "algorithm": m.algorithm, "hash": m.hex,
-                     "distance": m.distance, "variant": m.variant}
-                    for m in (result.matches if result else [])
-                ],
-                "skipped_low_quality": [hash_dict(h) for h in (result.skipped_low_quality if result else [])],
+        def hash_dict(h):
+            return {
+                "algorithm": h.algorithm,
+                "hash": h.hex,
+                "quality": h.quality,
+                "variant": h.variant,
             }
-            for path, hashes, result, verdict in report
-        ]}
+
+        doc = {
+            "images": [
+                {
+                    "path": path,
+                    "hashes": [hash_dict(h) for h in hashes],
+                    "matches": [
+                        {
+                            "id": m.id,
+                            "algorithm": m.algorithm,
+                            "hash": m.hex,
+                            "distance": m.distance,
+                            "variant": m.variant,
+                        }
+                        for m in (result.matches if result else [])
+                    ],
+                    "skipped_low_quality": [
+                        hash_dict(h)
+                        for h in (result.skipped_low_quality if result else [])
+                    ],
+                }
+                for path, hashes, result, verdict in report
+            ]
+        }
         for entry, (_, _, _, verdict) in zip(doc["images"], report):
             if verdict is not None:
                 entry["photodna"] = verdict
@@ -520,12 +682,25 @@ def hash_command(images, algorithms, hash_list, max_distance, min_quality, thoro
 @cli.command()
 @click.option("--host", default="0.0.0.0", help="Host to bind to")
 @click.option("--port", "-p", default=8000, help="Port to listen on")
-@click.option("--patch-size", type=int, default=None, help="Patch size (3-16); default from config")
-@click.option("--pyramid/--no-pyramid", default=None, help="Index targets at several scales (default: on)")
+@click.option(
+    "--patch-size",
+    type=int,
+    default=None,
+    help="Patch size (3-16); default from config",
+)
+@click.option(
+    "--pyramid/--no-pyramid",
+    default=None,
+    help="Index targets at several scales (default: on)",
+)
 @click.option("--thorough", is_flag=True, help=THOROUGH_HELP)
-@click.option("--hash-list", "hash_list", envvar="SPLICETRAIL_HASH_LIST",
-              type=click.Path(exists=True, dir_okay=False),
-              help="CSV of known hashes (algorithm,hash,id) that /hash matches uploads against")
+@click.option(
+    "--hash-list",
+    "hash_list",
+    envvar="SPLICETRAIL_HASH_LIST",
+    type=click.Path(exists=True, dir_okay=False),
+    help="CSV of known hashes (algorithm,hash,id) that /hash matches uploads against",
+)
 def serve(
     host: str,
     port: int,

@@ -25,7 +25,7 @@ def sigma_from_tables(tables) -> Optional[float]:
     if not tables:
         return None
     luma = np.asarray(tables[0], dtype=np.float64)
-    return float(np.sqrt((luma ** 2).mean() / 12.0) / 255.0)
+    return float(np.sqrt((luma**2).mean() / 12.0) / 255.0)
 
 
 def quantization_sigma(path: str) -> Optional[float]:
