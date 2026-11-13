@@ -648,3 +648,24 @@ def test_serve_reports_unwritable_index_dir_without_traceback(tmp_path, monkeypa
     assert "Can't use index dir" in result.output
     assert "Traceback" not in result.output
 
+
+def test_ready_hides_details_without_key(sample, tmp_path, monkeypatch):
+    monkeypatch.setenv("SPLICETRAIL_API_KEY", KEY)
+    client = _persistent_app(monkeypatch, tmp_path)
+    assert client.get("/health/ready").json() == {"status": "ready"}
+    wrong = client.get("/health/ready", headers={"X-API-Key": "nope"})
+    assert wrong.json() == {"status": "ready"}
+    full = client.get("/health/ready", headers={"X-API-Key": KEY}).json()
+    assert full["status"] == "ready" and "storage_free_mb" in full
+    assert "target_count" in full
+
+    monkeypatch.delenv("SPLICETRAIL_API_KEY")
+    assert "target_count" in TestClient(create_app()).get("/health/ready").json()
+
+
+@pytest.mark.parametrize("path", ["/health/live", "/health/ready"])
+def test_probes_accept_head(path, monkeypatch):
+    monkeypatch.setenv("SPLICETRAIL_API_KEY", KEY)
+    r = TestClient(create_app()).head(path)
+    assert r.status_code == 200 and r.content == b""
+

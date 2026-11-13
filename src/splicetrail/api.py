@@ -19,7 +19,7 @@ import numpy as np
 from PIL import Image
 
 try:
-    from fastapi import FastAPI, File, UploadFile, HTTPException, Query
+    from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Request
     from fastapi.concurrency import run_in_threadpool
     from pydantic import BaseModel
 
@@ -553,7 +553,9 @@ def create_app(
             "indexed_targets": engine.target_count,
         }
 
+    # HEAD too: some probes and uptime monitors only send HEAD.
     @app.get("/health/live")
+    @app.head("/health/live", include_in_schema=False)
     async def liveness_check():
         """
         Liveness probe for Kubernetes/container orchestration.
@@ -564,7 +566,8 @@ def create_app(
         return {"status": "alive", "timestamp": __import__("time").time()}
 
     @app.get("/health/ready")
-    async def readiness_check():
+    @app.head("/health/ready", include_in_schema=False)
+    async def readiness_check(request: Request):
         """
         Readiness probe for Kubernetes/container orchestration.
 
@@ -596,6 +599,12 @@ def create_app(
             body["storage_free_mb"] = shutil.disk_usage(store.root).free // (
                 1024 * 1024
             )
+        # This probe needs no key; with one set, only key holders see the
+        # counts and free space.
+        if api_key is not None and not hmac.compare_digest(
+            request.headers.get("x-api-key", "").encode(), api_key.encode()
+        ):
+            return {"status": "ready"}
         return body
 
     @app.get("/health")
