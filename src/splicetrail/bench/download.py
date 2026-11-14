@@ -72,10 +72,18 @@ def _download_with_token(ref: str, target: Path, token: str) -> None:
 
     import requests
 
+    from splicetrail import __version__
+
+    # Kaggle answers 404 to requests' default User-Agent, with or without a
+    # token, which looks exactly like a revoked token.
+    agent = {"User-Agent": f"splicetrail/{__version__}"}
     archive = target / "archive.zip"
     url = f"https://www.kaggle.com/api/v1/datasets/download/{ref}"
     response = requests.get(
-        url, headers={"Authorization": f"Bearer {token}"}, stream=True, timeout=60
+        url,
+        headers={**agent, "Authorization": f"Bearer {token}"},
+        stream=True,
+        timeout=60,
     )
     if response.status_code in (401, 403, 404):
         # A stale or revoked token gets 401/403/404 even for public datasets,
@@ -87,7 +95,7 @@ def _download_with_token(ref: str, target: Path, token: str) -> None:
             "retrying without it",
             file=sys.stderr,
         )
-        response = requests.get(url, stream=True, timeout=60)
+        response = requests.get(url, headers=agent, stream=True, timeout=60)
         if not response.ok:
             second = response.status_code
             response.close()
