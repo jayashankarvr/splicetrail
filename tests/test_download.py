@@ -79,8 +79,10 @@ def test_rejected_token_retries_without_header(monkeypatch, tmp_path, status, ca
     calls = []
     monkeypatch.setattr(requests, "get", _fake_get([status, 200], calls))
     download._download_with_token("owner/data", tmp_path, "s3cret-token")
-    assert calls[0] == {"Authorization": "Bearer s3cret-token"}
-    assert calls[1] is None
+    assert calls[0]["Authorization"] == "Bearer s3cret-token"
+    assert "Authorization" not in calls[1]
+    # requests' default User-Agent gets 404 from Kaggle.
+    assert all(c["User-Agent"].startswith("splicetrail/") for c in calls)
     assert (tmp_path / "img.png").exists()
     assert not (tmp_path / "archive.zip").exists()
     out = capsys.readouterr()
