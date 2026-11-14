@@ -298,9 +298,9 @@ engine = ForensicsEngine(config)
 The pyramid only covers copies that got smaller. For copies that were enlarged,
 `query_scales=[1.0, 0.75, 0.5]` also searches the questioned image shrunk to
 those sizes. Each extra scale is another full search, and the NFA is
-multiplied by the number of passes. On 40 + 40 CASIA v2 pairs it raised the
-share of splices found from 47.5% to 50% (57.5% at NFA < 1) at over 4x the
-time, so it's off by default and part of `thorough`. To reproduce, compare
+multiplied by the number of passes. On 40 + 40 CASIA v2 pairs it left the
+share of splices found at NFA < 10^-3 at 42.5% and raised it from 45% to 47.5%
+at NFA < 1, at 3x the time, so it's off by default and part of `thorough`. To reproduce, compare
 `python -m splicetrail.bench.runner --dataset casia2 --n 40 --negatives 40 --calibrate`
 with the same command plus `--query-scales 1.0 0.75 0.5`.
 
@@ -720,18 +720,18 @@ the baseline row used `--n 60 --negatives 60`):
 
 | | IoU | Precision | Recall | Detection AUC | Found at NFA < 10^-3 | s / image |
 |---|---|---|---|---|---|---|
-| SpliceTrail | 0.39 | 0.97 | 0.41 | 0.82 | 47.5% | 18 |
-| RootSIFT + RANSAC (60 + 60 pairs) | 0.18 | 0.95 | 0.19 | 0.82 | - | 0.1 |
+| SpliceTrail | 0.34 | 0.97 | 0.37 | 0.79 | 42.5% | 5.6 |
+| RootSIFT + RANSAC (60 + 60 pairs) | 0.18 | 0.95 | 0.19 | 0.82 | - | 0.02 |
 
-Real splices are much harder than the generated ones. SpliceTrail finds about half
-of them and stays precise: no alarm on any unrelated pair at any threshold,
+Real splices are much harder than the generated ones. SpliceTrail finds a little
+over 40% of them and stays precise: no alarm on any unrelated pair at any threshold,
 and one region in the 80 pairs that landed beside a splice instead of on it.
 Most of the misses are copies that were enlarged before pasting (about half
 of CASIA's splices are scaled up 1.15-2.5x), nearly flat regions with no
 texture to match, and very small splices. `query_scales=[1.0, 0.75, 0.5]`
-covers enlarged copies; on the same pairs it raises the share found to 50%
-(57.5% at NFA < 1) but adds misplaced regions on spliced images and takes
-over 4x as long, so it stays opt-in (same command plus
+covers enlarged copies; on the same pairs it raises the share found at NFA < 1
+to 47.5% (42.5% at NFA < 10^-3, unchanged) but adds misplaced regions on
+spliced images (5 in the 80 pairs) and takes 3x as long, so it stays opt-in (same command plus
 `--query-scales 1.0 0.75 0.5`).
 
 **Copy-move** (`--task copymove` on photos, or the standard sets). Each row is
@@ -743,11 +743,11 @@ calibration table at that NFA.
 
 | Dataset | Found at NFA < 10^-3 | Found at NFA < 1 | Clean images with an alarm (NFA < 10^-3) |
 |---|---|---|---|
-| Photo crops, recolored copies (60 + 60) | 72% | 78% | 0% |
-| CoMoFoD translation (25 + 25) | 40% | 44% | 0% |
-| CoMoFoD rotation (25 + 25) | 20% | 24% | 8% |
-| CoMoFoD scaling (25 + 25) | 16% | 16% | 8% |
-| COVERAGE (100 + 100) | 31% | 33% | 3% |
+| Photo crops, recolored copies (60 + 60) | 72% | 80% | 0% |
+| CoMoFoD translation (25 + 25) | 44% | 48% | 0% |
+| CoMoFoD rotation (25 + 25) | 20% | 20% | 4% |
+| CoMoFoD scaling (25 + 25) | 16% | 16% | 4% |
+| COVERAGE (100 + 100) | 31% | 33% | 4% |
 
 Copy-move is the harder task. Rotated and rescaled copies within one image
 aren't handled yet (rotation mode works across images only), and the clean
