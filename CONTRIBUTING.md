@@ -70,11 +70,12 @@ For maintainers. Releases go to PyPI from `.github/workflows/publish.yml`.
    which fails if the tag (without the `v`) differs from the `pyproject.toml`
    version, then builds, runs `twine check` and uploads to PyPI.
 
-One-time setup, before the first release: on pypi.org, add a pending trusted
-publisher (Account settings, Publishing) with project `splicetrail`, owner
-`jayashankarvr`, repository `splicetrail`, workflow `publish.yml` and
-environment `pypi`, and create an environment named `pypi` in the GitHub
-repository settings. No API token is needed.
+Upload credentials: a PyPI API token stored as the `PYPI_API_TOKEN` secret
+of the `pypi` environment in the GitHub repository settings (only the publish
+job can read it). To switch to PyPI trusted publishing instead, add a trusted
+publisher on pypi.org (project `splicetrail`, owner `jayashankarvr`,
+repository `splicetrail`, workflow `publish.yml`, environment `pypi`) and
+delete the secret; the workflow falls back to it automatically.
 
 ## License
 
