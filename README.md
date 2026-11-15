@@ -7,7 +7,10 @@ The default search covers the common edits and is quick; `--thorough` also check
 ## Install
 
 ```bash
-pip install splicetrail
+pip install splicetrail   # from PyPI
+
+# Or the latest code straight from GitHub:
+pip install "git+https://github.com/jayashankarvr/splicetrail.git"
 
 # With optional features (quote the brackets; zsh treats them as a glob):
 pip install "splicetrail[api]"    # REST API

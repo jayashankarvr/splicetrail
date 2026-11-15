@@ -57,6 +57,25 @@ Good places to start:
 - Documentation and examples
 - Benchmark harness and datasets
 
+## Releasing
+
+For maintainers. Releases go to PyPI from `.github/workflows/publish.yml`.
+
+1. Bump the version in `pyproject.toml` and `src/splicetrail/__init__.py`
+   (and the example responses in `docs/API.md`).
+2. Move the `[Unreleased]` notes in `CHANGELOG.md` under a new
+   `## [X.Y.Z] - YYYY-MM-DD` heading and merge to `main`.
+3. Tag the merge commit `vX.Y.Z` and push the tag.
+4. Create a GitHub release from that tag. Publishing it runs the workflow,
+   which fails if the tag (without the `v`) differs from the `pyproject.toml`
+   version, then builds, runs `twine check` and uploads to PyPI.
+
+One-time setup, before the first release: on pypi.org, add a pending trusted
+publisher (Account settings, Publishing) with project `splicetrail`, owner
+`jayashankarvr`, repository `splicetrail`, workflow `publish.yml` and
+environment `pypi`, and create an environment named `pypi` in the GitHub
+repository settings. No API token is needed.
+
 ## License
 
 By contributing, you agree that your contributions are licensed under the
