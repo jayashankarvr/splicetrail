@@ -148,7 +148,7 @@ Root endpoint - basic health check.
 ```json
 {
   "name": "SpliceTrail Forensics API",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "status": "healthy",
   "indexed_targets": 42
 }
@@ -220,7 +220,7 @@ Comprehensive health check with detailed metrics.
 ```json
 {
   "status": "healthy",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "timestamp": 1704652800.0,
   "uptime_seconds": 3600.5,
   "index": {
