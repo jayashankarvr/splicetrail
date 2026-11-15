@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.1] - 2026-11-15
+
+### Added
+- PyPI publishing workflow (`.github/workflows/publish.yml`): publishing a GitHub release builds the sdist and wheel, checks the tag against the package version and uploads to PyPI with trusted publishing. Release steps are in CONTRIBUTING.md.
+
+### Fixed
+- The benchmark downloader sent requests' default User-Agent, which Kaggle answers with 404 with or without a token, so every token looked revoked. It now sends a `splicetrail` User-Agent and the download works.
+
+### Changed
+- README benchmark tables re-measured on 0.3.0 (CASIA v2 and copy-move rows).
+
 ## [0.3.0] - 2026-11-13
 
 This release reworks the matching pipeline and makes the REST API safe to
