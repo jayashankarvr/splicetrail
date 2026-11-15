@@ -110,6 +110,7 @@ Read from the environment when the server starts:
 | `SPLICETRAIL_LOCK_TIMEOUT` | 30 | Seconds a request waits for the engine before 503 |
 | `SPLICETRAIL_HASH_LIST` | unset | CSV of known hashes for `/hash` (same as `serve --hash-list`) |
 | `SPLICETRAIL_PHOTODNA_KEY` | unset | PhotoDNA Cloud Service key; `photodna` on `/hash` also needs `SPLICETRAIL_API_KEY` |
+| `SPLICETRAIL_CORS_ORIGINS` | unset (no CORS headers) | Comma-separated origins whose browser pages may call the API, e.g. `https://app.example.com,http://localhost:3000`; see [CORS](#cors) |
 
 The engine settings (`SPLICETRAIL_PATCH_SIZE`, `SPLICETRAIL_THOROUGH` and the
 others) are listed in the README under Environment Variables.
@@ -133,6 +134,30 @@ worker thread, so health checks keep answering. A request that can't get the
 engine within `SPLICETRAIL_LOCK_TIMEOUT` seconds gets 503 with a `Retry-After`
 header. A request that has started can't be cancelled: it finishes even if the
 client disconnects.
+
+### CORS
+
+Browsers only let a page on another origin read API responses when the server
+says so. By default it doesn't: no `Access-Control-*` headers are sent, so
+only same-origin pages, scripts and `curl` can use the API. To let a web app
+call it, list its origins in `SPLICETRAIL_CORS_ORIGINS`:
+
+```bash
+export SPLICETRAIL_CORS_ORIGINS="https://app.example.com,http://localhost:3000"
+```
+
+Each entry must be an exact `scheme://host[:port]` (http or https, no path or
+trailing slash, as the browser sends it in `Origin`); anything else stops
+startup with an error. Allowed origins may use `GET`, `POST`, `DELETE` and
+`HEAD` with the `X-API-Key` and `Content-Type` headers; cookies and other
+credentials are not allowed. Preflight `OPTIONS` requests are answered without
+the API key (browsers never send it on a preflight), but every real request
+still needs it, and a 401 carries the CORS headers so the page can read it.
+
+`*` (any origin) is accepted only without `SPLICETRAIL_API_KEY`; together they
+stop startup, since a key that browser JavaScript holds is readable by the
+page's users and any script it loads. A key in a browser app is visible to
+its users either way, so prefer a backend that holds the key and calls the API.
 
 ---
 
