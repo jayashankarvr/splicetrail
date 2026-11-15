@@ -1,8 +1,8 @@
 name: Publish
 
 # Publishing a GitHub release uploads that version to PyPI. Authentication is
-# PyPI trusted publishing (OIDC), so there is no API token in the repo; the
-# one-time PyPI setup is described in CONTRIBUTING.md ("Releasing").
+# the PYPI_API_TOKEN secret of the `pypi` environment; without it the action
+# falls back to PyPI trusted publishing (OIDC). See CONTRIBUTING.md ("Releasing").
 on:
   release:
     types: [published]
@@ -66,3 +66,5 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          password: ${{ secrets.PYPI_API_TOKEN }}
