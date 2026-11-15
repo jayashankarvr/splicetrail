@@ -15,12 +15,14 @@ import uuid
 from contextlib import asynccontextmanager
 from dataclasses import replace
 from typing import Optional, List, Dict, Any, Tuple
+from urllib.parse import urlsplit
 import numpy as np
 from PIL import Image
 
 try:
     from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Request
     from fastapi.concurrency import run_in_threadpool
+    from fastapi.middleware.cors import CORSMiddleware
     from pydantic import BaseModel
 
     FASTAPI_AVAILABLE = True
@@ -51,6 +53,9 @@ DEFAULT_LOCK_TIMEOUT = 30.0  # seconds; SPLICETRAIL_LOCK_TIMEOUT
 ALLOWED_IMAGE_FORMATS = {"JPEG", "PNG", "BMP", "TIFF", "WEBP"}
 # Reachable without the API key so container health checks keep working.
 PUBLIC_PATHS = {"/health/live", "/health/ready"}
+# What browsers on SPLICETRAIL_CORS_ORIGINS may send (the methods the routes use).
+CORS_METHODS = ["GET", "POST", "DELETE", "HEAD"]
+CORS_HEADERS = ["X-API-Key", "Content-Type"]
 
 
 class MatchCoord(BaseModel):
@@ -412,6 +417,46 @@ class IndexStore:
                     pass
 
 
+def _cors_origins(raw: Optional[str], api_key: Optional[str]) -> List[str]:
+    """
+    Parse SPLICETRAIL_CORS_ORIGINS: comma-separated exact origins, or ``*``.
+
+    Raises:
+        ValueError: on an entry that isn't scheme://host[:port], or on ``*``
+            while an API key is set
+    """
+    origins = [o.strip() for o in (raw or "").split(",") if o.strip()]
+    if "*" in origins:
+        if api_key:
+            raise ValueError(
+                "SPLICETRAIL_CORS_ORIGINS=* can't be combined with SPLICETRAIL_API_KEY: "
+                "any web page could then use a key that reaches browser JavaScript. "
+                "List the exact origins instead."
+            )
+        return ["*"]
+    for origin in origins:
+        parts = urlsplit(origin)
+        try:
+            parts.port  # raises on a non-numeric or out-of-range port
+            valid = (
+                parts.scheme in ("http", "https")
+                and bool(parts.hostname)
+                and "@" not in parts.netloc
+                and not parts.netloc.endswith(":")
+                and not (parts.path or parts.query or parts.fragment)
+                and origin.endswith(parts.netloc)
+            )
+        except ValueError:
+            valid = False
+        if not valid:
+            raise ValueError(
+                f"Bad origin {origin!r} in SPLICETRAIL_CORS_ORIGINS: expected "
+                "scheme://host[:port] with no path, e.g. https://app.example.com"
+            )
+    # Browsers send the scheme and host in lower case.
+    return [o.lower() for o in origins]
+
+
 def create_app(
     config: Optional[Config] = None, hash_list_path: Optional[str] = None
 ) -> "FastAPI":
@@ -425,6 +470,8 @@ def create_app(
         SPLICETRAIL_MAX_TARGETS: target cap, oldest evicted first (default 1000)
         SPLICETRAIL_MAX_IMAGE_PIXELS: upload pixel cap (default MAX_IMAGE_PIXELS)
         SPLICETRAIL_LOCK_TIMEOUT: seconds to wait for the engine before 503 (default 30)
+        SPLICETRAIL_CORS_ORIGINS: comma-separated origins browsers may call the
+            API from (unset: no CORS headers); ``*`` only without an API key
 
     Args:
         config: Optional engine configuration; a max_targets of None gets the
@@ -433,7 +480,8 @@ def create_app(
             to the SPLICETRAIL_HASH_LIST environment variable. Loaded once, here.
 
     Raises:
-        ValueError: if the hash list or the saved index can't be read
+        ValueError: if the hash list or the saved index can't be read, or
+            SPLICETRAIL_CORS_ORIGINS is malformed
 
     Returns:
         FastAPI application instance
@@ -447,6 +495,7 @@ def create_app(
         "SPLICETRAIL_LOCK_TIMEOUT", DEFAULT_LOCK_TIMEOUT, min_val=0.0
     )
     index_dir = os.environ.get("SPLICETRAIL_INDEX_DIR") or None
+    cors_origins = _cors_origins(os.environ.get("SPLICETRAIL_CORS_ORIGINS"), api_key)
 
     @asynccontextmanager
     async def lifespan(app):
@@ -465,6 +514,17 @@ def create_app(
         api_key=api_key,
         body_limit=MAX_FILE_SIZE + MULTIPART_OVERHEAD,
     )
+    if cors_origins:
+        # Added last, so it runs outside the guard: it answers preflights
+        # (which never carry X-API-Key) itself, and its headers also go on
+        # the guard's 401s and 413s so browser code can read them.
+        app.add_middleware(
+            CORSMiddleware,
+            allow_origins=cors_origins,
+            allow_methods=CORS_METHODS,
+            allow_headers=CORS_HEADERS,
+            allow_credentials=False,
+        )
 
     # Initialize engine
     config = config or Config()

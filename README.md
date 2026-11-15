@@ -369,6 +369,7 @@ Server settings (engine settings are under [Environment Variables](#environment-
 | `SPLICETRAIL_MAX_TARGETS` | 1000 | Past this many targets, the oldest is evicted |
 | `SPLICETRAIL_MAX_IMAGE_PIXELS` | 500000 | Larger `/index` and `/match` uploads get 413 |
 | `SPLICETRAIL_LOCK_TIMEOUT` | 30 | Seconds a request waits for the engine before 503 |
+| `SPLICETRAIL_CORS_ORIGINS` | unset: no CORS headers | Comma-separated origins (`https://app.example.com,http://localhost:3000`) whose browser pages may call the API; `*` only without an API key |
 
 Uploads are capped at 50 MB. Requests that use the engine take turns, and one
 that has started can't be cancelled; it finishes even if the client goes

@@ -35,6 +35,7 @@ def _plain_server(monkeypatch):
         "SPLICETRAIL_MAX_IMAGE_PIXELS",
         "SPLICETRAIL_LOCK_TIMEOUT",
         "SPLICETRAIL_PHOTODNA_KEY",
+        "SPLICETRAIL_CORS_ORIGINS",
     ):
         monkeypatch.delenv(name, raising=False)
 
@@ -685,3 +686,127 @@ def test_match_unknown_target_ids_is_404(sample):
         "/match", params={"target_ids": "t0, "}, files={"file": _png(sample.tampered)}
     )
     assert ok.status_code == 200 and ok.json()["detected"]
+
+
+# --- 10. CORS ----------------------------------------------------------------
+
+ORIGIN = "https://app.example.com"
+
+
+def _preflight(client, origin=ORIGIN, path="/index"):
+    return client.options(
+        path,
+        headers={
+            "Origin": origin,
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "x-api-key",
+        },
+    )
+
+
+def test_cors_off_by_default():
+    client = TestClient(create_app())
+    r = client.get("/health/live", headers={"Origin": ORIGIN})
+    assert r.status_code == 200
+    assert "access-control-allow-origin" not in r.headers
+    pre = _preflight(client)
+    assert pre.status_code != 200
+    assert not any(h.startswith("access-control-") for h in pre.headers)
+
+
+@pytest.mark.parametrize("raw", ["", " , "])
+def test_cors_empty_value_is_off(monkeypatch, raw):
+    monkeypatch.setenv("SPLICETRAIL_CORS_ORIGINS", raw)
+    r = TestClient(create_app()).get("/health/live", headers={"Origin": ORIGIN})
+    assert "access-control-allow-origin" not in r.headers
+
+
+def test_cors_allowed_origin(monkeypatch):
+    monkeypatch.setenv(
+        "SPLICETRAIL_CORS_ORIGINS", f" {ORIGIN} , ,http://localhost:3000"
+    )
+    client = TestClient(create_app())
+    r = client.get("/health/live", headers={"Origin": "http://localhost:3000"})
+    assert r.headers["access-control-allow-origin"] == "http://localhost:3000"
+    r = client.get("/health/live", headers={"Origin": ORIGIN})
+    assert r.headers["access-control-allow-origin"] == ORIGIN
+    assert "access-control-allow-credentials" not in r.headers
+
+
+def test_cors_preflight_needs_no_key(monkeypatch):
+    monkeypatch.setenv("SPLICETRAIL_API_KEY", KEY)
+    monkeypatch.setenv("SPLICETRAIL_CORS_ORIGINS", ORIGIN)
+    client = TestClient(create_app())
+    for path in ("/index", "/match", "/targets/t0", "/health"):
+        pre = _preflight(client, path=path)
+        assert pre.status_code == 200, path
+        assert pre.headers["access-control-allow-origin"] == ORIGIN
+        assert "x-api-key" in pre.headers["access-control-allow-headers"].lower()
+        methods = pre.headers["access-control-allow-methods"]
+        assert {"GET", "POST", "DELETE", "HEAD"} <= set(methods.split(", "))
+
+
+def test_cors_disallowed_origin(monkeypatch):
+    monkeypatch.setenv("SPLICETRAIL_CORS_ORIGINS", ORIGIN)
+    client = TestClient(create_app())
+    r = client.get("/health/live", headers={"Origin": "https://evil.example"})
+    assert r.status_code == 200
+    assert "access-control-allow-origin" not in r.headers
+    pre = _preflight(client, origin="https://evil.example")
+    assert pre.status_code != 200
+    assert "access-control-allow-origin" not in pre.headers
+
+
+def test_cors_request_still_needs_key(monkeypatch, sample):
+    monkeypatch.setenv("SPLICETRAIL_API_KEY", KEY)
+    monkeypatch.setenv("SPLICETRAIL_CORS_ORIGINS", ORIGIN)
+    client = TestClient(create_app())
+    r = client.post(
+        "/index", headers={"Origin": ORIGIN}, files={"file": _png(sample.donor)}
+    )
+    assert r.status_code == 401
+    # The browser can read the 401 instead of seeing an opaque CORS failure.
+    assert r.headers["access-control-allow-origin"] == ORIGIN
+    ok = client.post(
+        "/index",
+        headers={"Origin": ORIGIN, "X-API-Key": KEY},
+        files={"file": _png(sample.donor)},
+    )
+    assert ok.status_code == 200
+    assert ok.headers["access-control-allow-origin"] == ORIGIN
+
+
+def test_cors_wildcard_without_key(monkeypatch):
+    monkeypatch.setenv("SPLICETRAIL_CORS_ORIGINS", "*")
+    r = TestClient(create_app()).get("/health/live", headers={"Origin": ORIGIN})
+    assert r.headers["access-control-allow-origin"] == "*"
+
+
+def test_cors_wildcard_with_key_fails_at_startup(monkeypatch):
+    monkeypatch.setenv("SPLICETRAIL_API_KEY", KEY)
+    monkeypatch.setenv("SPLICETRAIL_CORS_ORIGINS", f"{ORIGIN},*")
+    with pytest.raises(ValueError, match=r"CORS_ORIGINS=\*.*API_KEY"):
+        create_app()
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "app.example.com",
+        "https://app.example.com/",
+        "https://app.example.com/api",
+        "https://app.example.com?x=1",
+        "https://app.example.com#x",
+        "https://user@app.example.com",
+        "https://app.example.com:",
+        "https://app.example.com:99999",
+        "https://app.example.com:http",
+        "ftp://app.example.com",
+        "https://",
+        "null",
+    ],
+)
+def test_cors_malformed_origin_fails_at_startup(monkeypatch, bad):
+    monkeypatch.setenv("SPLICETRAIL_CORS_ORIGINS", f"{ORIGIN},{bad}")
+    with pytest.raises(ValueError, match="Bad origin"):
+        create_app()

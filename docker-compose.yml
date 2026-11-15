@@ -25,6 +25,9 @@ services:
       # Require an X-API-Key header on every endpoint but /health/live and
       # /health/ready. Set it in the shell or an .env file next to this one.
       - SPLICETRAIL_API_KEY=${SPLICETRAIL_API_KEY:-}
+      # Origins whose browser pages may call the API, comma-separated, e.g.
+      # https://app.example.com. Empty: no CORS headers.
+      - SPLICETRAIL_CORS_ORIGINS=${SPLICETRAIL_CORS_ORIGINS:-}
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live')"]

@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Opt-in CORS**: `SPLICETRAIL_CORS_ORIGINS` (comma-separated exact origins) lets browser pages on those origins call the API with `GET`, `POST`, `DELETE` and `HEAD` and the `X-API-Key` and `Content-Type` headers, without credentials. Unset or empty sends no CORS headers, as before. Preflights need no API key; real requests still do. A malformed origin, or `*` together with `SPLICETRAIL_API_KEY`, stops startup.
+
 ## [0.3.1] - 2026-11-15
 
 ### Added
